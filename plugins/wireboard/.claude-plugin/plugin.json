@@ -1,7 +1,7 @@
 {
   "name": "wireboard",
   "displayName": "WireBoard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Install the WireBoard tracking script and custom events (declarative or programmatic) in any codebase.",
   "author": {
     "name": "WireBoard",

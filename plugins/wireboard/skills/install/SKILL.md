@@ -1,6 +1,6 @@
 ---
 name: install
-description: Install or debug WireBoard analytics in a codebase. Covers the tracking script for pageviews, SPA client-side route tracking, custom events (declarative or programmatic), and the GTM dataLayer bridge. Includes a troubleshooting flow for when things are not working.
+description: Install WireBoard analytics in a codebase, or debug an existing WireBoard integration that isn't working. Covers the tracking script for pageviews, SPA client-side route tracking, custom events (declarative or programmatic), the GTM dataLayer bridge, and a step-by-step troubleshooting flow.
 when_to_use: |
   Use when the user mentions: install wireboard, add wireboard, wireboard.io, wireboardEvent, data-wireboard-event, wireboard tracking, wireboard SPA, set up custom events, track button click with wireboard. ALSO use for debugging: events aren't firing, no events, events not working, wireboard not tracking, pageviews missing, wireboard dashboard empty, tracking not working, wireboardEvent does nothing. Do NOT use for general analytics unrelated to WireBoard, or for the public REST/Live API (point users at the @wireboard/api or wireboard-api SDKs instead).
 argument-hint: "[install | events | debug]"

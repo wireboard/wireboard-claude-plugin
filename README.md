@@ -25,7 +25,7 @@
 
 ## What it does
 
-Tells Claude how to install and debug WireBoard analytics in any web codebase, the right way for your framework, without you copy-pasting from docs:
+Tells Claude how to install WireBoard analytics in any web codebase the right way for your framework, and how to debug your integration when something doesn't work. No copy-pasting from docs:
 
 - **Tracking script install** in any framework's `<head>`: Next.js (App + Pages Router), Nuxt 3, SvelteKit, Remix, Astro, Vite (React/Vue), Laravel Blade, Rails, Django, WordPress, plain HTML, Wix/Squarespace
 - **SPA client-side route tracking** wired correctly per router: `usePathname`, `routeChangeComplete`, `useLocation`, `afterEach`, `afterNavigate`, `astro:after-swap`, and the vanilla History API
