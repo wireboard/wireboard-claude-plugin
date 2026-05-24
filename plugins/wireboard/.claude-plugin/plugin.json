@@ -7,7 +7,7 @@
     "name": "WireBoard",
     "url": "https://wireboard.io"
   },
-  "homepage": "https://wireboard.io/docs",
+  "homepage": "https://wireboard.io/docs/claude-plugin",
   "repository": "https://github.com/wireboard/wireboard-claude-plugin",
   "license": "MIT",
   "keywords": [

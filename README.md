@@ -19,6 +19,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license: MIT"></a>
   <a href="https://code.claude.com/docs/en/plugins"><img src="https://img.shields.io/badge/Claude%20Code-plugin-7c5cff.svg" alt="Claude Code plugin"></a>
   <a href="https://wireboard.io/docs"><img src="https://img.shields.io/badge/docs-wireboard.io-1f8fff.svg" alt="docs: wireboard.io"></a>
+  <a href="https://wireboard.io/docs/claude-plugin"><img src="https://img.shields.io/badge/plugin%20docs-wireboard.io-2563eb.svg" alt="plugin docs: wireboard.io/docs/claude-plugin"></a>
 </p>
 
 ---
@@ -90,6 +91,8 @@ Three ways to invoke it, all load the same content:
 ```
 
 Use this form when you want to disambiguate from any other `/install` skills you might have. Plugin skills are namespaced as `/<plugin>:<skill>`.
+
+[Full plugin docs →](https://wireboard.io/docs/claude-plugin)
 
 ## What you need from your WireBoard dashboard
 
