@@ -1,0 +1,19 @@
+{
+  "name": "wireboard",
+  "displayName": "WireBoard",
+  "version": "0.1.0",
+  "description": "Install the WireBoard tracking script and custom events (declarative or programmatic) in any codebase.",
+  "author": {
+    "name": "WireBoard",
+    "url": "https://wireboard.io"
+  },
+  "homepage": "https://wireboard.io/docs",
+  "repository": "https://github.com/wireboard/wireboard-claude-plugin",
+  "license": "MIT",
+  "keywords": [
+    "wireboard",
+    "analytics",
+    "tracking",
+    "custom-events"
+  ]
+}

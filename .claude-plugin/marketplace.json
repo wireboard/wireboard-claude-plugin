@@ -1,0 +1,19 @@
+{
+  "name": "wireboard",
+  "description": "WireBoard's official Claude Code plugins. Install WireBoard analytics in any codebase.",
+  "owner": {
+    "name": "WireBoard"
+  },
+  "plugins": [
+    {
+      "name": "wireboard",
+      "displayName": "WireBoard",
+      "source": "./plugins/wireboard",
+      "description": "Install the WireBoard tracking script and custom events in any codebase.",
+      "homepage": "https://wireboard.io/docs",
+      "repository": "https://github.com/wireboard/wireboard-claude-plugin",
+      "license": "MIT",
+      "keywords": ["wireboard", "analytics", "tracking", "custom-events"]
+    }
+  ]
+}
