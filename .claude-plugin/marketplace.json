@@ -9,11 +9,11 @@
       "name": "wireboard",
       "displayName": "WireBoard",
       "source": "./plugins/wireboard",
-      "description": "Install the WireBoard tracking script and custom events in any codebase.",
+      "description": "Install the WireBoard tracking script and custom events in any codebase, or via the official Google Tag Manager template.",
       "homepage": "https://wireboard.io/docs/claude-plugin",
       "repository": "https://github.com/wireboard/wireboard-claude-plugin",
       "license": "MIT",
-      "keywords": ["wireboard", "analytics", "tracking", "custom-events"]
+      "keywords": ["wireboard", "analytics", "tracking", "custom-events", "gtm", "google-tag-manager"]
     }
   ]
 }

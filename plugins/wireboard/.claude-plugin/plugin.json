@@ -1,8 +1,8 @@
 {
   "name": "wireboard",
   "displayName": "WireBoard",
-  "version": "0.1.1",
-  "description": "Install the WireBoard tracking script and custom events (declarative or programmatic) in any codebase.",
+  "version": "0.1.2",
+  "description": "Install the WireBoard tracking script and custom events (declarative or programmatic) in any codebase, or via the official Google Tag Manager template.",
   "author": {
     "name": "WireBoard",
     "url": "https://wireboard.io"
@@ -14,6 +14,8 @@
     "wireboard",
     "analytics",
     "tracking",
-    "custom-events"
+    "custom-events",
+    "gtm",
+    "google-tag-manager"
   ]
 }

@@ -1,8 +1,8 @@
 ---
 name: install
-description: Install WireBoard analytics in a codebase, or debug an existing WireBoard integration that isn't working. Covers the tracking script for pageviews, SPA client-side route tracking, custom events (declarative or programmatic), the GTM dataLayer bridge, and a step-by-step troubleshooting flow.
+description: Install WireBoard analytics in a codebase, or debug an existing WireBoard integration that isn't working. Covers the tracking script for pageviews, SPA client-side route tracking, custom events (declarative or programmatic), the official Google Tag Manager template, the dataLayer bridge, and a step-by-step troubleshooting flow.
 when_to_use: |
-  Use when the user mentions: install wireboard, add wireboard, wireboard.io, wireboardEvent, data-wireboard-event, wireboard tracking, wireboard SPA, set up custom events, track button click with wireboard. ALSO use for debugging: events aren't firing, no events, events not working, wireboard not tracking, pageviews missing, wireboard dashboard empty, tracking not working, wireboardEvent does nothing. Do NOT use for general analytics unrelated to WireBoard, or for the public REST/Live API (point users at the @wireboard/api or wireboard-api SDKs instead).
+  Use when the user mentions: install wireboard, add wireboard, wireboard.io, wireboardEvent, data-wireboard-event, wireboard tracking, wireboard SPA, set up custom events, track button click with wireboard, wireboard via GTM, wireboard tag manager template. ALSO use for debugging: events aren't firing, no events, events not working, wireboard not tracking, pageviews missing, wireboard dashboard empty, tracking not working, wireboardEvent does nothing. Do NOT use for general analytics unrelated to WireBoard, or for the public REST/Live API (point users at the @wireboard/api or wireboard-api SDKs instead).
 argument-hint: "[install | events | debug]"
 ---
 
@@ -45,6 +45,8 @@ Detect their framework by reading `package.json`, `composer.json`, `Gemfile`, `n
 
 ### Step 2: Install the tracking script
 
+**If the site already uses Google Tag Manager, mention that they have a choice:** install via the official WireBoard GTM template (no code changes, managed entirely from GTM) or install via the code snippet like any other site. Neither is mandatory just because GTM is present. Detect GTM by grepping the codebase for `googletagmanager.com/gtm.js` or a `GTM-` container ID, or just ask. If the user picks the GTM path, see [`gtm.md`](gtm.md) and skip the rest of this step. If they pick the code path or there is no GTM, continue below.
+
 Ask the user to paste their tracking snippet. **Paste it verbatim** into the right entry point for their framework.
 
 **Also ask: does the site have a cookie consent banner?** If yes, the correct pattern is to load the tracker cookieless and upgrade on consent (not the default cookie-mode snippet). See the "Consent banner flow" section in [`tracking-script.md`](tracking-script.md). If no banner, paste the snippet as-is (default cookie mode) or switch to static cookieless if the site is privacy-first.
@@ -60,6 +62,8 @@ For SPAs, you MUST do BOTH:
 2. Wire up the framework's router hook to call `trackPageView` on each navigation. Patterns per framework are in [`spa-routing.md`](spa-routing.md).
 
 Skipping either step rejects every client-side pageview with HTTP 400 `publisher not found`.
+
+**If the user chose the GTM template install path in Step 2 AND the site is a SPA**, the GTM Initialization tag only fires on full page loads, so client-side navigations are NOT tracked out of the box. Tell the user honestly: either add the `<meta>` tag and router hook above to the codebase (the template's `wireboardSetPublisher` call sets the publisher in memory, so `window.wireboard('trackPageView', ...)` from a router hook will work), or accept session-only pageviews. There is no pure-GTM way to track SPA route changes with the current template.
 
 ### Step 4: Custom events (only if the user wants them)
 
@@ -90,6 +94,7 @@ If anything doesn't work, go to [`troubleshooting.md`](troubleshooting.md). DO N
 Load these on demand for the work in each step. Do not copy their content into your reply unless quoting a small block.
 
 - [`tracking-script.md`](tracking-script.md): per-framework install patterns + snippet anatomy + cookieless mode
+- [`gtm.md`](gtm.md): install via the official Google Tag Manager template (no code changes, Init + Custom Event tags, dataLayer auto-capture, consent flow)
 - [`spa-routing.md`](spa-routing.md): client-side route tracking for React, Next, Vue, Nuxt, SvelteKit, Remix, Astro, vanilla History API
 - [`custom-events.md`](custom-events.md): event anatomy, declarative attributes, programmatic API, value normalization, props rules and limits, casing, framework examples, dataLayer mirror
 - [`troubleshooting.md`](troubleshooting.md): diagnostic flow when integration isn't working + symptom table

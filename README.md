@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  Tracking script, SPA route tracking, custom events, cookie consent flow, and a built-in debugger.<br>
+  Tracking script, SPA route tracking, custom events, cookie consent flow, GTM template install, and a built-in debugger.<br>
   Claude does the wiring, framework-aware, no copy-pasting from docs.
 </p>
 
@@ -32,6 +32,7 @@ Tells Claude how to install WireBoard analytics in any web codebase the right wa
 - **SPA client-side route tracking** wired correctly per router: `usePathname`, `routeChangeComplete`, `useLocation`, `afterEach`, `afterNavigate`, `astro:after-swap`, and the vanilla History API
 - **Custom events**, declarative (`data-wireboard-event-*` attributes) or programmatic (`window.wireboardEvent({...})`), with framework-specific patterns for React click handlers, visibility tracking, form submits, Vue, Svelte, and TypeScript types
 - **Cookie consent flow**: load cookieless, upgrade on accept (`upgradeStorage`), revoke on withdraw. Works with Cookiebot, OneTrust, Termly, Osano, or any custom banner
+- **Google Tag Manager**: if the site already runs GTM, Claude offers the official [WireBoard GTM template](https://github.com/wireboard/wireboard-gtm-template) as an alternative to editing the codebase (Init + Custom Event tags, dataLayer auto-capture, consent flow)
 - **Debugging**: when something breaks, Claude walks you through a diagnostic flow (network filter by collector hostname, console checks, manual event firing) instead of guessing
 - **Built-in guardrails**: never fabricates appId/UUID values, never inspects tracker source, never leaks internal architecture, follows the WireBoard API contract documented in the skill
 
