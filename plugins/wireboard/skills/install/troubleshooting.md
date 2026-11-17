@@ -102,6 +102,6 @@ In order:
 | Custom event has category and action but no label | Label is optional | Add `label` if a third level is wanted. |
 | One property split into two keys (`cartSize` and `cartsize`) | Declarative and JS forms mixed (HTML lowercases attribute names) | One casing per key everywhere; lowercase with hyphens is safest. |
 | View events fire many times | Declarative `data-wireboard-event="view"` on a component that remounts | Programmatic `wireboardEvent` with `useInView({ triggerOnce: true })` ([`custom-events.md`](custom-events.md)). |
-| Value shows `0.00` | No value, a non-numeric string, or a currency code (`CHF 10`) | Pass a number. Formats like `1.234,56` are also misread (`1.23`). See "Value normalization" in [`custom-events.md`](custom-events.md). |
+| Value shows `0.00` | No value, or a string that is not a number | Pass a number. Formatted prices (`1.234,56`, `CHF 10`) are understood since events.min.js 1.3.4. See "Value normalization" in [`custom-events.md`](custom-events.md). |
 | Works in dev, not in prod | Build or CMS removed the snippet, a Content-Security-Policy blocks `static.wireboard.io` or the collector, or a consent tool blocks scripts | View the production page source; check the CSP header (`script-src` for `static.wireboard.io`, `connect-src` and `img-src` for the collector hostname). |
 | Test visits never show, real ones do | Headless test browser or IP Ignore List | See the top of this page. Never "fix" it by clearing `wireboard_*` local storage keys: that breaks visit and journey data. |

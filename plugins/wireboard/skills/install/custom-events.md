@@ -42,13 +42,14 @@ The `value` field is **always normalized to a 2-decimal string** before being se
 
 - `49.99` or `"49.99"` → `"49.99"`
 - `"120"` → `"120.00"` (always 2 decimals)
-- `"49,99"` → `"49.99"` (a comma followed by exactly 2 digits is read as a decimal comma)
-- `"$1,234.56"` → `"1234.56"` (`$`, `€`, `£`, `¥` and thousands commas are removed)
-- `"1.234,56"` → `"1.23"` (wrong: dot thousands separators are not understood)
-- `"CHF 10"`, `"10 EUR"` and other currency codes → `"0.00"`
+- `"49,99"` or `"1,5"` → decimal comma: `"49.99"`, `"1.50"`
+- `"$1,234.56"`, `"1.234,56"`, `"€1.234,56"`, `"1 234,56"` → `"1234.56"` (when both `.` and `,` appear, the last one is the decimal mark)
+- `"1,234"` or `"1.234.567"` → thousands only: `"1234.00"`, `"1234567.00"`
+- `"CHF 1'234.50"`, `"10 EUR"`, `"USD9.99"` → currency symbols, 3-letter codes, spaces and apostrophes are removed: `"1234.50"`, `"10.00"`, `"9.99"`
+- `"1.234"` → `"1.23"` (a single dot is a decimal point)
 - no value, non-numeric, `NaN`, or larger than 1e9 → `"0.00"` (the non-numeric cases log `Invalid or unreasonable number detected`)
 
-So convert prices to a number in code (`49.99`, not a formatted string). For non-currency quantities (seconds watched, items in cart, score), pass a number too. For non-numeric dimensions (color, size, plan tier), use `props`.
+These rules are those of events.min.js 1.3.4 (November 2026); older versions misread `"1.234,56"` and currency codes. A plain number in code (`49.99`, not a formatted string) is still the safest. For non-currency quantities (seconds watched, items in cart, score), pass a number too. For non-numeric dimensions (color, size, plan tier), use `props`.
 
 ## Custom properties (`props`)
 

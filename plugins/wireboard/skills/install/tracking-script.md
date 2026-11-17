@@ -49,7 +49,7 @@ When the framework needs the script body as a string (Next.js `__html`, Nuxt `in
 Look at the `newTracker` options the user pasted:
 
 - No `useCookies` / `useLocalStorage` options: **cookie mode** (the default, see "Cookies and consent" below).
-- `useCookies: false` alone: no cookies, but the tracker still keeps a persistent visitor ID in local storage (`wb_duid`). This is what the dashboard's "Use cookies" switch produces. It is NOT storage-free. If the user wants no device storage at all, add `useLocalStorage: false` as well, and tell them why.
+- `useCookies: false` alone: no cookies, but the tracker still keeps a persistent visitor ID in local storage (`wb_duid`). Snippets from the dashboard's "Use cookies" switch looked like this before November 2026 (the switch now adds both options). It is NOT storage-free. If the user wants no device storage at all, add `useLocalStorage: false` as well, and tell them why.
 - `useCookies: false` and `useLocalStorage: false`: cookieless mode.
 
 ## Where to install it
@@ -92,9 +92,9 @@ What the tracker stores depends on the storage options:
 | **Cookieless mode** | Privacy-first site without a banner, or the pre-consent state of a banner flow | No cookies and no tracker storage. Each page load counts as a new visitor (no returning-visitor detection). |
 | **Banner flow** (typical for GDPR) | The site has a consent banner | Cookieless until the visitor accepts, then cookie mode from that moment (plus `wb_duid` in local storage). |
 
-The 4 characters after `_wb_id.` and `_wb_ses.` are derived from the site's domain: they differ from site to site and never change for a given domain. The cookies are host-only (the page's exact host name), `Path=/`, not `HttpOnly`, written by the script in the page with no `SameSite` attribute, so browsers apply their default (`Lax` in Chrome and Edge). Safari limits cookies written by scripts to 7 days. The collector sets no cookies. Because they are first-party, the site's own scripts and its consent tool can read and delete them.
+The 4 characters after `_wb_id.` and `_wb_ses.` are derived from the site's domain: they differ from site to site and never change for a given domain. The cookies are host-only (the page's exact host name), `Path=/`, not `HttpOnly`, written by the script in the page with `SameSite=Lax`, and `Secure` on HTTPS pages (tracker 1.2.2.3 and later). Safari limits cookies written by scripts to 7 days. The collector sets no cookies. Because they are first-party, the site's own scripts and its consent tool can read and delete them.
 
-If `events.min.js` is loaded, it also saves the landing page's UTM parameters in local storage (keys ending in `_utm_campaign`, `_utm_source`, and so on), in every mode. Mention it when the user documents their storage for a privacy policy.
+If `events.min.js` is loaded, it also saves the landing page's UTM parameters in local storage (keys `<host with dots as _>_utm_campaign`, `_utm_source`, and so on) while the tracker stores data (cookie or local storage mode, or after `upgradeStorage`). In cookieless mode it keeps them in memory for the page only (events.min.js 1.3.4 and later). Mention the keys when the user documents their storage for a privacy policy.
 
 ### Cookieless mode (static config)
 
@@ -146,10 +146,11 @@ window.wireboard('upgradeStorage', { useCookies: true, useLocalStorage: true });
            const name = c.split('=')[0].trim();
            if (/^_wb_/.test(name)) document.cookie = name + '=; Max-Age=0; path=/';
        });
+       const utmPrefix = location.hostname.replace(/\./g, '_') + '_utm_';
        try {
            for (let i = localStorage.length - 1; i >= 0; i--) {
                const key = localStorage.key(i);
-               if (/^(wb_duid|wireboard_(step|last_request|last_url))$|^wireboardOutQueue/.test(key)) {
+               if (/^(wb_duid|wireboard_(step|last_request|last_url))$|^wireboardOutQueue/.test(key) || key.indexOf(utmPrefix) === 0) {
                    localStorage.removeItem(key);
                }
            }

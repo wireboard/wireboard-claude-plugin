@@ -1,7 +1,7 @@
 {
   "name": "wireboard",
   "displayName": "WireBoard Analytics MCP",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Ask Claude about your website traffic, and let it install WireBoard analytics for you. Query live and historical visitors, top pages, referrers, countries, devices and custom events in plain language. Set up the tracking script, single-page app routing, custom events and a cookie consent flow in any framework, then debug the integration when something looks wrong.",
   "author": {
     "name": "WireBoard",
