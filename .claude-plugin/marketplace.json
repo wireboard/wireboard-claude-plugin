@@ -7,9 +7,9 @@
   "plugins": [
     {
       "name": "wireboard",
-      "displayName": "WireBoard Analytics MCP",
+      "displayName": "WireBoard Analytics",
       "source": "./plugins/wireboard",
-      "description": "Ask Claude about your website traffic, and let it install WireBoard analytics for you: live and historical visitors, pages, referrers and custom events in plain language, plus framework-aware setup of tracking, SPA routing, custom events and cookie consent.",
+      "description": "Install WireBoard analytics correctly in any codebase, and debug it: tracking script per framework, single-page apps, custom events, cookie consent and the Google Tag Manager template.",
       "homepage": "https://wireboard.io/docs/claude-plugin",
       "repository": "https://github.com/wireboard/wireboard-claude-plugin",
       "license": "MIT",
@@ -17,7 +17,6 @@
         "wireboard",
         "analytics",
         "web-analytics",
-        "mcp",
         "tracking",
         "custom-events",
         "gtm",
@@ -29,10 +28,30 @@
       "tags": [
         "analytics",
         "web-analytics",
-        "mcp",
         "privacy",
         "tracking",
         "google-tag-manager"
+      ]
+    },
+    {
+      "name": "wireboard-mcp",
+      "displayName": "WireBoard Analytics MCP",
+      "source": "./plugins/wireboard-mcp",
+      "description": "Ask Claude about your WireBoard analytics in plain language, through the official read-only WireBoard MCP server. Needs a WireBoard API token.",
+      "homepage": "https://wireboard.io/docs/api-mcp",
+      "repository": "https://github.com/wireboard/wireboard-claude-plugin",
+      "license": "MIT",
+      "keywords": [
+        "wireboard",
+        "analytics",
+        "mcp",
+        "reporting"
+      ],
+      "category": "monitoring",
+      "tags": [
+        "analytics",
+        "mcp",
+        "reporting"
       ]
     }
   ]

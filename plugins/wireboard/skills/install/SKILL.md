@@ -84,7 +84,7 @@ Read [`custom-events.md`](custom-events.md) before writing event code: fields, v
 4. **A 200 alone does not prove the visit was counted** (bots and IPs on the IP Ignore List also get 200). Confirm in WireBoard:
    - a new site's onboarding has a **Verify Installation** step that shows "Traffic Detected!" when the first visit arrives;
    - or the dashboard's real-time view shows the visit within seconds;
-   - or, if the WireBoard MCP tools are connected (see below), call `get_live_state` for the site (paid plans) or `get_aggregate` with range `today`.
+   - or, if the WireBoard analytics tools (the `wireboard-mcp` plugin, see below) are connected, call `get_live_state` for the site (paid plans) or `get_aggregate` with range `today`.
 5. After testing, the user can add their own IP to the site's IP Ignore List so their visits stop counting. Not before: it would hide the test visits.
 
 The site manager's "connected" icon is a separate check of the homepage HTML: it stays off for GTM installs and for snippets added through JavaScript, even when tracking works.
@@ -93,14 +93,12 @@ If something fails, go to [`troubleshooting.md`](troubleshooting.md) rather than
 
 ## WireBoard analytics tools (MCP)
 
-This plugin also connects Claude to the user's WireBoard data through the WireBoard MCP server: sites, period totals, time series, daily history, breakdowns (country, device, referrer, page...), top URLs, custom event queries and the live snapshot. All tools are read-only.
+Questions about the user's traffic numbers are answered by the separate `wireboard-mcp` plugin (WireBoard Analytics MCP), from the same marketplace: sites, period totals, time series, daily history, breakdowns, top URLs, custom events and the live snapshot, all read-only. If its tools are connected, use them (for example in Step 5). If they are not and the user wants Claude to read their analytics, tell them:
 
-They need an API token. If a tool answers "No WireBoard API token is set", tell the user:
+1. Run `/plugin install wireboard-mcp@wireboard` (after `/plugin marketplace add wireboard/wireboard-claude-plugin` if the marketplace is not added yet).
+2. When Claude Code asks, paste a WireBoard API token created at [wireboard.io/dashboard/settings/api](https://wireboard.io/dashboard/settings/api) with the `analytics:read` ability (and `live:read` for the live snapshot). Then `/reload-plugins`.
 
-1. Create a token at [wireboard.io/dashboard/settings/api](https://wireboard.io/dashboard/settings/api) with the `analytics:read` ability (and `live:read` for the live snapshot).
-2. In Claude Code, run `/plugin`, open the **Installed** tab, select **WireBoard**, choose **Configure options**, and paste the token. Then run `/reload-plugins` or restart Claude Code.
-
-The live snapshot needs a paid plan; on the free plan, history queries cover the last 30 days. The tools say so when a limit applies.
+If a tool answers "No WireBoard API token is set", the token can be added later: `/plugin`, **Installed** tab, **WireBoard Analytics MCP**, **Configure options**. The live snapshot needs a paid plan; on the free plan, history queries cover the last 30 days.
 
 ## Reference files
 

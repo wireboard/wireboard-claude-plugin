@@ -1,8 +1,8 @@
 {
   "name": "wireboard",
-  "displayName": "WireBoard Analytics MCP",
-  "version": "0.2.2",
-  "description": "Ask Claude about your website traffic, and let it install WireBoard analytics for you. Query live and historical visitors, top pages, referrers, countries, devices and custom events in plain language. Set up the tracking script, single-page app routing, custom events and a cookie consent flow in any framework, then debug the integration when something looks wrong.",
+  "displayName": "WireBoard Analytics",
+  "version": "0.3.0",
+  "description": "Install WireBoard analytics correctly in any codebase, and debug it when something looks wrong. Claude adds the tracking script in the right place for your framework, counts page changes in single-page apps, instruments custom events, sets up a cookie consent flow (or the official Google Tag Manager template), and walks you through a step-by-step check of the integration.",
   "author": {
     "name": "WireBoard",
     "email": "info@wireboard.io",
@@ -22,7 +22,6 @@
     "web-analytics",
     "website-analytics",
     "real-time-analytics",
-    "mcp",
     "google-analytics-alternative",
     "privacy",
     "cookieless",
@@ -41,13 +40,5 @@
     "laravel",
     "wordpress",
     "google-tag-manager"
-  ],
-  "userConfig": {
-    "wireboard_token": {
-      "type": "string",
-      "title": "WireBoard API token (optional)",
-      "description": "Lets Claude read your analytics. Create one at https://wireboard.io/dashboard/settings/api with the analytics:read and live:read abilities. Leave it empty if you only want Claude to install tracking: you can add it later in /plugin, Installed tab, WireBoard, Configure options.",
-      "sensitive": true
-    }
-  }
+  ]
 }

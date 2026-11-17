@@ -1,0 +1,37 @@
+{
+  "name": "wireboard-mcp",
+  "displayName": "WireBoard Analytics MCP",
+  "version": "0.1.0",
+  "description": "Ask Claude about your WireBoard analytics in plain language: live and historical visitors, top pages, referrers, countries, devices, custom events and campaigns, through the official read-only WireBoard MCP server. Needs a WireBoard API token.",
+  "author": {
+    "name": "WireBoard",
+    "email": "info@wireboard.io",
+    "url": "https://wireboard.io"
+  },
+  "homepage": "https://wireboard.io/docs/api-mcp",
+  "repository": "https://github.com/wireboard/wireboard-claude-plugin",
+  "license": "MIT",
+  "icon": "./assets/icon.png",
+  "documentationUrl": "https://wireboard.io/docs/api-mcp",
+  "supportUrl": "https://wireboard.io/contact",
+  "privacyPolicyUrl": "https://wireboard.io/privacy",
+  "termsOfServiceUrl": "https://wireboard.io/terms",
+  "keywords": [
+    "wireboard",
+    "analytics",
+    "web-analytics",
+    "real-time-analytics",
+    "mcp",
+    "google-analytics-alternative",
+    "privacy",
+    "reporting"
+  ],
+  "userConfig": {
+    "wireboard_token": {
+      "type": "string",
+      "title": "WireBoard API token",
+      "description": "Lets Claude read your analytics. Create one at https://wireboard.io/dashboard/settings/api with the analytics:read and live:read abilities. You can change it later in /plugin, Installed tab, WireBoard Analytics MCP, Configure options.",
+      "sensitive": true
+    }
+  }
+}
