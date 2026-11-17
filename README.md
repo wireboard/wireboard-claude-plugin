@@ -4,116 +4,68 @@
   </a>
 </p>
 
-<h1 align="center"><code>wireboard</code> plugin for Claude Code</h1>
+# WireBoard Analytics MCP for Claude Code
 
-<p align="center">
-  Install <a href="https://wireboard.io">WireBoard</a> analytics in your codebase from inside <a href="https://claude.com/claude-code">Claude Code</a>.
-</p>
+Ask Claude about your website traffic, and let it install [WireBoard](https://wireboard.io) analytics for you.
 
-<p align="center">
-  Tracking script, SPA route tracking, custom events, cookie consent flow, GTM template install, and a built-in debugger.<br>
-  Claude does the wiring, framework-aware, no copy-pasting from docs.
-</p>
+WireBoard is a real-time web analytics platform: live visitors, custom dashboards, custom events, funnels and journeys, with first-party cookies or a fully cookieless mode. This plugin gives Claude Code two things:
 
-<p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license: MIT"></a>
-  <a href="https://code.claude.com/docs/en/plugins"><img src="https://img.shields.io/badge/Claude%20Code-plugin-7c5cff.svg" alt="Claude Code plugin"></a>
-  <a href="https://wireboard.io/docs"><img src="https://img.shields.io/badge/docs-wireboard.io-1f8fff.svg" alt="docs: wireboard.io"></a>
-  <a href="https://wireboard.io/docs/claude-plugin"><img src="https://img.shields.io/badge/plugin%20docs-wireboard.io-2563eb.svg" alt="plugin docs: wireboard.io/docs/claude-plugin"></a>
-</p>
-
----
-
-## What it does
-
-Tells Claude how to install WireBoard analytics in any web codebase the right way for your framework, and how to debug your integration when something doesn't work. No copy-pasting from docs:
-
-- **Tracking script install** in any framework's `<head>`: Next.js (App + Pages Router), Nuxt 3, SvelteKit, Remix, Astro, Vite (React/Vue), Laravel Blade, Rails, Django, WordPress, plain HTML, Wix/Squarespace
-- **SPA client-side route tracking** wired correctly per router: `usePathname`, `routeChangeComplete`, `useLocation`, `afterEach`, `afterNavigate`, `astro:after-swap`, and the vanilla History API
-- **Custom events**, declarative (`data-wireboard-event-*` attributes) or programmatic (`window.wireboardEvent({...})`), with framework-specific patterns for React click handlers, visibility tracking, form submits, Vue, Svelte, and TypeScript types
-- **Cookie consent flow**: load cookieless, upgrade on accept (`upgradeStorage`), revoke on withdraw. Works with Cookiebot, OneTrust, Termly, Osano, or any custom banner
-- **Google Tag Manager**: if the site already runs GTM, Claude offers the official [WireBoard GTM template](https://github.com/wireboard/wireboard-gtm-template) as an alternative to editing the codebase (Init + Custom Event tags, dataLayer auto-capture, consent flow)
-- **Debugging**: when something breaks, Claude walks you through a diagnostic flow (network filter by collector hostname, console checks, manual event firing) instead of guessing
-- **Built-in guardrails**: never fabricates appId/UUID values, never inspects tracker source, never leaks internal architecture, follows the WireBoard API contract documented in the skill
+- **Your analytics in plain language.** Ask "how many visitors did we get last week?" or "which pages under /blog bring the most traffic?" and Claude answers from your WireBoard data: period totals, daily history, time series, breakdowns by country, device, browser, referrer or page, top URLs, custom events with their UTM sources, and the live snapshot of who is on your site right now. Read-only.
+- **A correct install in any codebase.** Claude adds the WireBoard tracking script in the right place for your framework, counts client-side navigation in single-page apps, instruments custom events, sets up a cookie consent flow, offers the official Google Tag Manager template when the site uses GTM, and walks you through debugging when the dashboard looks wrong.
 
 ## Install
 
-In Claude Code, add the [Anthropic community marketplace](https://github.com/anthropics/claude-plugins-community) (if you haven't already) and install:
+In Claude Code:
 
-```
-/plugin marketplace add anthropics/claude-plugins-community
-/plugin install wireboard@claude-community
-```
-
-The first command is a one-time setup that gives you access to every plugin in the community catalog; the second installs WireBoard specifically.
-
-<details>
-<summary>Or install directly from this repo (faster updates, useful before the community catalog has synced the latest commit)</summary>
-
-```
+```text
 /plugin marketplace add wireboard/wireboard-claude-plugin
 /plugin install wireboard@wireboard
 ```
 
-Both `wireboard` parts in `wireboard@wireboard` are intentional: the first is the plugin name, the second is the marketplace name (this repo doubles as its own single-plugin marketplace).
+Claude Code then asks for an optional **WireBoard API token**:
 
-</details>
+- Want Claude to read your analytics? Create a token at [wireboard.io/dashboard/settings/api](https://wireboard.io/dashboard/settings/api) with the `analytics:read` ability (add `live:read` for the live snapshot) and paste it. It is stored in your system's secure storage, not in a settings file.
+- Only want Claude to install tracking? Leave it empty. You can add it later: `/plugin`, **Installed** tab, **WireBoard**, **Configure options**.
 
-## Usage
+The analytics tools run with Node.js 18 or later (`npx`). No WireBoard account yet? [Sign up](https://wireboard.io/register), there is a free plan.
 
-Three ways to invoke it, all load the same content:
+## Example prompts
 
-**Natural language** (recommended). Just talk to Claude:
+> How many visitors did my site get last week, compared with the week before?
+
+> What's happening on my site right now?
+
+> Which countries and referrers brought the most visitors this month?
+
+> How many purchase events came from utm_source=newsletter yesterday?
 
 > Install WireBoard on this Next.js site.
 
-> Add a click tracker on the "Buy Now" button. Category `ecommerce`, action `purchase`, value `49.99`.
+> Add a click event on the "Buy now" button: category ecommerce, action purchase, value 49.99.
 
-> Add a view tracker on the hero section without mount loops.
+> I have a Cookiebot banner. Set up WireBoard so it only uses cookies after consent.
 
-> The dashboard shows one pageview per session on my React Router app, fix it.
+> My React Router app shows one pageview per visit. Fix it.
 
-> I have a Cookiebot banner, set up wireboard with the consent flow.
+> The events aren't showing up in my dashboard. Debug it.
 
-> The events aren't showing up in my dashboard, debug it.
+The install workflow is also available as `/wireboard:install`.
 
-**Short slash command**:
+## What the plugin runs, and where data goes
 
-```
-/install
-```
+- **Analytics tools (MCP server).** The plugin starts the official open-source [`@wireboard/mcp`](https://github.com/wireboard/mcp) server, version pinned, on your machine with `npx` (downloaded from the npm registry). It sends read-only requests, authenticated with your token, to the WireBoard API at `https://api.wireboard.io`, and only when Claude calls one of its tools. It changes nothing in your account and sends nothing else anywhere: no telemetry, no conversation content. Without a token it starts but every tool answers with instructions to add one.
+- **Install skill.** Instructions only, no code runs. When you ask for an install, Claude edits your project to add the WireBoard tracking script, loaded from `https://static.wireboard.io/`. Once you deploy it, your site's visitors send pageviews and events to your WireBoard collector. What the tracker stores in visitors' browsers in each mode is documented in [Cookies and storage](https://wireboard.io/docs/cookies).
 
-(Shows as `/install (WireBoard)` in your autocomplete.)
+You can turn the analytics tools off on their own in `/mcp`, or remove the whole plugin with `/plugin`.
 
-**Fully qualified slash command**:
+## Documentation and support
 
-```
-/wireboard:install
-```
-
-Use this form when you want to disambiguate from any other `/install` skills you might have. Plugin skills are namespaced as `/<plugin>:<skill>`.
-
-[Full plugin docs →](https://wireboard.io/docs/claude-plugin)
-
-## What you need from your WireBoard dashboard
-
-Before you start, have these ready:
-
-1. **Your tracking snippet**. Open the site manager directly: [wireboard.io/dashboard?action=site-edit](https://wireboard.io/dashboard?action=site-edit), select your site, click **Install**, copy the script block. Paste it into your chat with Claude when asked. (The long way: [wireboard.io/dashboard](https://wireboard.io/dashboard), click **Manage your Sites** in the sidebar, then proceed as above.)
-2. **Your Publisher UUID**. Found in [Settings, Integrations](https://wireboard.io/dashboard/settings/integrations). Also embedded in the snippet above, so the plugin will extract it from what you paste.
-
-Claude will NEVER invent these values; it always asks for your snippet first.
-
-Don't have a WireBoard account yet? Sign up at [wireboard.io/register](https://wireboard.io/register). Free plan available.
-
-## What this plugin does NOT cover
-
-- **WireBoard public REST and Live (SSE) APIs**. For programmatic access to your data, use the official SDKs:
-    - JavaScript / TypeScript: [`@wireboard/api`](https://www.npmjs.com/package/@wireboard/api)
-    - Python: [`wireboard-api`](https://pypi.org/project/wireboard-api/)
-    - LLM agents (MCP): [`@wireboard/mcp`](https://www.npmjs.com/package/@wireboard/mcp)
-- **General analytics work** unrelated to WireBoard.
+- Plugin documentation: [wireboard.io/docs/claude-plugin](https://wireboard.io/docs/claude-plugin)
+- Troubleshooting a WireBoard install: [wireboard.io/docs/troubleshooting](https://wireboard.io/docs/troubleshooting)
+- API and MCP server: [wireboard.io/docs/api-mcp](https://wireboard.io/docs/api-mcp)
+- Support: [wireboard.io/contact](https://wireboard.io/contact) or [GitHub issues](https://github.com/wireboard/wireboard-claude-plugin/issues)
+- [Privacy policy](https://wireboard.io/privacy) and [terms of service](https://wireboard.io/terms)
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/wireboard/wireboard-claude-plugin/blob/master/LICENSE).

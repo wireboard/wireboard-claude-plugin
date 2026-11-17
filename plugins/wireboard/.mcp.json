@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "wireboard": {
+      "command": "npx",
+      "args": ["-y", "@wireboard/mcp@0.1.4"],
+      "env": {
+        "WIREBOARD_TOKEN": "${user_config.wireboard_token}"
+      }
+    }
+  }
+}

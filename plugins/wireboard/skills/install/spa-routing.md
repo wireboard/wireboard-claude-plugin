@@ -1,239 +1,229 @@
-# SPA route tracking on client-side navigation
+# Pageviews on client-side navigation
 
-The tracking snippet calls `trackPageView` exactly once, when the script first loads on the initial document. SPAs do client-side navigation (`/home` to `/pricing` without a full reload) and the snippet does not fire a new pageview for those. You must wire it up explicitly.
+The snippet sends one pageview, for the document that loaded. Single-page apps and client-side navigation (`/home` to `/pricing` without loading a new document) send nothing more on their own.
 
-**Without this wiring, the dashboard shows one pageview per session instead of one per route.**
+**Without this wiring the dashboard shows one pageview per visit instead of one per page.**
 
-## Prerequisites (REQUIRED, even if not using custom events)
+This applies to: React (React Router, TanStack Router), Next.js, Vue Router, Nuxt, SvelteKit, Angular, Astro with `<ClientRouter />`, Laravel Inertia, Rails Turbo Drive, Livewire `wire:navigate`, and any app that calls `history.pushState`.
 
-The SPA route wiring reads the Publisher UUID from a `<meta>` tag. **Add this to `<head>` even when the user does not want custom events**:
+## Prerequisite: the publisher meta tag
+
+Every pageview needs the Publisher UUID. The navigation code reads it from a meta tag, so add this to `<head>` even if the user does not want custom events:
 
 ```html
 <meta name="wireboard-publisher" content="YOUR-PUBLISHER-UUID">
 ```
 
-The UUID is the same value embedded in the tracking snippet's `customContext`. Extract it from what the user pasted, or ask.
+Use the UUID from the snippet the user pasted (`publisher:'...'` in `customContext`). Without the tag the helper below sends nothing: navigations are silently not counted, with no error anywhere.
 
-Without this meta tag, every SPA navigation produces a failed HTTP 400 request to the collector.
+## The shared helper
 
-## The reusable pattern
+Put this once in the app (for example `src/lib/wireboard.ts`, or an inline `<script>` for non-bundled sites) and call `trackWireboardRoute()` from the router hook. It:
 
-Every framework example below reads the publisher from the meta tag and calls `trackPageView` with the required context array:
+- sends one pageview per real address change, so router hooks that also fire on first render, repeated events for one navigation, `replaceState` calls that do not navigate, and `#anchor` jumps are all ignored;
+- waits briefly for the new page's `<title>` (frameworks set it while the page mounts), so a view never carries the previous page's title;
+- reports the new address and the previous page as referrer.
 
-```javascript
-const publisher = document
-    .querySelector('meta[name="wireboard-publisher"]')
-    ?.getAttribute('content');
-if (!publisher) return; // guard: missing meta tag would produce HTTP 400
-const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-window.wireboard?.('trackPageView', null, ctx);
+```ts
+// wireboard.ts: one WireBoard pageview per client-side navigation.
+const strip = (href: string) => href.split('#')[0];
+let lastUrl = strip(window.location.href);
+
+export function trackWireboardRoute(): void {
+    const url = strip(window.location.href);
+    if (url === lastUrl) return; // same page: first render, duplicate event, hash jump
+    const referrer = lastUrl;
+    lastUrl = url;
+
+    const titleBefore = document.title;
+    let sent = false;
+    const send = () => {
+        if (sent) return;
+        sent = true;
+        observer.disconnect();
+        clearTimeout(timer);
+        const publisher = document
+            .querySelector('meta[name="wireboard-publisher"]')
+            ?.getAttribute('content');
+        if (!publisher || typeof window.wireboard !== 'function') return;
+        window.wireboard('setCustomUrl', url);
+        window.wireboard('setReferrerUrl', referrer);
+        window.wireboard('trackPageView', document.title, [
+            { schema: 'wb:io.wireboard/publisher', data: { publisher } },
+        ]);
+    };
+    // Wait for the title to change, at most 250 ms (pages that keep their title).
+    const observer = new MutationObserver(() => {
+        if (document.title !== titleBefore) setTimeout(send, 0);
+    });
+    observer.observe(document.head, { childList: true, subtree: true, characterData: true });
+    const timer = setTimeout(send, 250);
+}
 ```
 
-The optional `?.` chain handles ad blockers and slow script loads gracefully.
+For plain JavaScript, drop the type annotation and `export`, and expose it as `window.trackWireboardRoute = trackWireboardRoute`. For TypeScript, declare `window.wireboard` once (see "TypeScript" in [`custom-events.md`](custom-events.md)).
+
+Hash routers (`/#/dashboard` style): use the full `window.location.href` instead of `strip(...)`, because there the fragment is the page address.
+
+**Performance timing on SPAs**: the snippet's `contexts: { performanceTiming: true }` describes the first document load and is attached to every later pageview of the visit, which skews page-load metrics for client-side views. For an SPA, suggest removing that option from `newTracker` (or setting it to `false`) and explain why; it is the user's choice.
 
 ## Per-framework wiring
 
+Each pattern below just calls the helper. No first-render guard is needed: the helper ignores a call for the page already counted.
+
 ### Next.js App Router
 
-Create a client component and mount it once in the root layout. Depend on `pathname` only, NOT `useSearchParams()` (that hook requires a `<Suspense>` boundary in production builds; the build fails with `Missing Suspense boundary with useSearchParams` otherwise, and you usually do not want a new pageview on every query-param tweak anyway).
+A client component mounted once in the root layout. Depend on `pathname` only: `useSearchParams()` needs a `<Suspense>` boundary or the production build fails with `Missing Suspense boundary with useSearchParams`.
 
 ```tsx
 // app/wireboard-route-tracker.tsx
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { trackWireboardRoute } from '@/lib/wireboard';
 
 export function WireboardRouteTracker() {
     const pathname = usePathname();
-    const first = useRef(true);
-    useEffect(() => {
-        if (first.current) { first.current = false; return; } // snippet already counted page 1
-        const publisher = document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content');
-        if (!publisher) return;
-        const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-        window.wireboard?.('trackPageView', null, ctx);
-    }, [pathname]);
+    useEffect(() => { trackWireboardRoute(); }, [pathname]);
     return null;
 }
 ```
 
-Then in `app/layout.tsx`:
-
-```tsx
-<body>
-    <WireboardRouteTracker />
-    {children}
-</body>
-```
-
-If query-param-aware pageviews are needed (rare for analytics), add `useSearchParams()` AND wrap the tracker in `<Suspense fallback={null}>` where it is mounted.
+In `app/layout.tsx`: `<body><WireboardRouteTracker />{children}</body>`.
 
 ### Next.js Pages Router
 
-In `pages/_app.tsx`. `routeChangeComplete` does NOT fire on initial mount, so no first-render guard:
+In `pages/_app.tsx`:
 
 ```tsx
 import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
+import { trackWireboardRoute } from '../lib/wireboard';
 
 export default function MyApp({ Component, pageProps }: AppProps) {
     const router = useRouter();
     useEffect(() => {
-        const handler = () => {
-            const publisher = document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content');
-            if (!publisher) return;
-            const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-            window.wireboard?.('trackPageView', null, ctx);
-        };
-        router.events.on('routeChangeComplete', handler);
-        return () => router.events.off('routeChangeComplete', handler);
+        router.events.on('routeChangeComplete', trackWireboardRoute);
+        return () => router.events.off('routeChangeComplete', trackWireboardRoute);
     }, [router]);
     return <Component {...pageProps} />;
 }
 ```
 
-### React Router v6
+### React Router (v7, v8) and React Router framework mode
 
-Drop a tracker component inside the `<BrowserRouter>` subtree. Depend on `pathname` only (not `search`):
+React Router 8 removed the `react-router-dom` package: import from `react-router` (v7 accepts both). Inside the router tree, for example in the root layout or `app/root.tsx`:
 
-```jsx
-import { useLocation } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+```tsx
+import { useLocation } from 'react-router';
+import { useEffect } from 'react';
+import { trackWireboardRoute } from './lib/wireboard';
 
-function WireboardRouteTracker() {
-    const location = useLocation();
-    const first = useRef(true);
-    useEffect(() => {
-        if (first.current) { first.current = false; return; }
-        const publisher = document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content');
-        if (!publisher) return;
-        const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-        window.wireboard?.('trackPageView', null, ctx);
-    }, [location.pathname]);
+export function WireboardRouteTracker() {
+    const { pathname } = useLocation();
+    useEffect(() => { trackWireboardRoute(); }, [pathname]);
     return null;
 }
 ```
 
-### Vue Router
+Older projects: React Router v6 imports `useLocation` from `react-router-dom`, Remix v2 from `@remix-run/react`. Match what the project already imports.
 
-In `main.ts` after creating the router. `afterEach` fires on initial navigation too, so guard:
+### TanStack Router / TanStack Start
+
+After creating the router:
 
 ```ts
-let first = true;
-router.afterEach(() => {
-    if (first) { first = false; return; }
-    const publisher = document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content');
-    if (!publisher) return;
-    const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-    window.wireboard?.('trackPageView', null, ctx);
-});
+router.subscribe('onResolved', () => trackWireboardRoute());
 ```
 
-### Nuxt 3
+### Vue Router
 
-Create `plugins/wireboard-route.client.ts` (the `.client.ts` suffix makes it browser-only):
+In `main.ts`, after creating the router:
+
+```ts
+router.afterEach(() => trackWireboardRoute());
+```
+
+### Nuxt
+
+Nuxt 4 keeps app code in `app/`: create `app/plugins/wireboard-route.client.ts` (Nuxt 3: `plugins/wireboard-route.client.ts`). The `.client.ts` suffix makes it browser-only. Put the helper in `app/utils/wireboard.ts` (Nuxt 3: `utils/`) so it is auto-imported, or import it.
 
 ```ts
 export default defineNuxtPlugin(() => {
-    const router = useRouter();
-    let first = true;
-    router.afterEach(() => {
-        if (first) { first = false; return; }
-        const publisher = document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content');
-        if (!publisher) return;
-        const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-        (window as any).wireboard?.('trackPageView', null, ctx);
-    });
+    useRouter().afterEach(() => trackWireboardRoute());
 });
 ```
 
 ### SvelteKit
 
-In `src/routes/+layout.svelte`. `afterNavigate` fires on initial component mount AND on every navigation, so guard:
+In `src/routes/+layout.svelte`:
 
 ```svelte
 <script>
-import { afterNavigate } from '$app/navigation';
-let first = true;
-afterNavigate(() => {
-    if (first) { first = false; return; }
-    const publisher = document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content');
-    if (!publisher) return;
-    const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-    window.wireboard?.('trackPageView', null, ctx);
-});
+    import { afterNavigate } from '$app/navigation';
+    import { trackWireboardRoute } from '$lib/wireboard';
+
+    afterNavigate(() => trackWireboardRoute());
 </script>
 ```
 
-### Remix
+### Angular
 
-In `app/root.tsx`. Uses React Router internally so the pattern matches:
+In the root component:
 
-```tsx
-import { useLocation } from '@remix-run/react';
-import { useEffect, useRef } from 'react';
+```ts
+import { Component, inject } from '@angular/core';
+import { NavigationEnd, Router } from '@angular/router';
+import { trackWireboardRoute } from './wireboard';
 
-function WireboardRouteTracker() {
-    const location = useLocation();
-    const first = useRef(true);
-    useEffect(() => {
-        if (first.current) { first.current = false; return; }
-        const publisher = document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content');
-        if (!publisher) return;
-        const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-        window.wireboard?.('trackPageView', null, ctx);
-    }, [location.pathname]);
-    return null;
+@Component({ /* ... */ })
+export class AppComponent {
+    constructor() {
+        inject(Router).events.subscribe((e) => {
+            if (e instanceof NavigationEnd) trackWireboardRoute();
+        });
+    }
 }
 ```
 
-Mount `<WireboardRouteTracker />` inside the `<Layout>` component in `app/root.tsx`.
+### Astro with `<ClientRouter />`
 
-### Astro with client-side routing (`<ClientRouter />` / `<ViewTransitions />`)
-
-Astro is mostly multi-page (full reloads), so the snippet's initial `trackPageView` covers most usage. For pages using client-side routing, wire to `astro:after-swap`.
-
-In Astro 5 and later the routing component is `<ClientRouter />` (imported from `astro:transitions`). In Astro 3 and 4 it was `<ViewTransitions />`; that name still works as a deprecated alias on Astro 5. The event name (`astro:after-swap`) is the same on both.
-
-`astro:after-swap` only fires on transitions (not on initial full-page load), so no first-render guard is needed. The defensive `if (!window.__wbAstroInit)` guard makes the listener registration idempotent across any unusual execution path:
+Astro is multi-page unless the layout uses `<ClientRouter />` (from `astro:transitions`; Astro 3 and 4 called it `<ViewTransitions />`, a name removed since). With it, listen to `astro:after-swap`, in an inline script in the layout, together with the helper as plain JavaScript:
 
 ```html
 <script is:inline>
 if (!window.__wbAstroInit) {
     window.__wbAstroInit = true;
-    document.addEventListener('astro:after-swap', () => {
-        const publisher = document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content');
-        if (!publisher) return;
-        const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-        window.wireboard?.('trackPageView', null, ctx);
-    });
+    document.addEventListener('astro:after-swap', () => window.trackWireboardRoute?.());
 }
 </script>
 ```
 
-### Vanilla SPA (History API)
+### Laravel Inertia, Rails Turbo, Livewire
 
-Listen on `popstate` and patch `pushState` / `replaceState`. Run once on initial load (the snippet's own `trackPageView` covers the first hit, so no extra call):
+These announce navigations with document events. Load the helper as plain JavaScript (in the main JS entry or an inline script) and add the matching listener:
 
 ```javascript
-function fireWireboardPV() {
-    const publisher = document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content');
-    if (!publisher) return;
-    const ctx = [{ schema: 'wb:io.wireboard/publisher', data: { publisher } }];
-    window.wireboard?.('trackPageView', null, ctx);
-}
-const origPush = history.pushState;
-history.pushState = function (...args) { origPush.apply(this, args); fireWireboardPV(); };
-const origReplace = history.replaceState;
-history.replaceState = function (...args) { origReplace.apply(this, args); fireWireboardPV(); };
-window.addEventListener('popstate', fireWireboardPV);
+document.addEventListener('inertia:navigate', () => trackWireboardRoute());   // Inertia
+document.addEventListener('turbo:load', () => trackWireboardRoute());         // Rails Turbo Drive
+document.addEventListener('livewire:navigated', () => trackWireboardRoute()); // Livewire wire:navigate
 ```
 
-## Why the customContext is REQUIRED on every call
+They also fire on the first page load: the helper ignores that call. For Laravel, [`wireboard/laravel-cmp`](https://github.com/wireboard/laravel-cmp) does all of this (plus consent) without custom code.
 
-WireBoard rejects any tracking request whose customContext is missing a `wb:io.wireboard/publisher` entry. The response is HTTP 400 `publisher not found`. When the `(appId, publisher)` pair does not match a real site on the user's account, the response is HTTP 403 `invalid publisher or appid`.
+### Any other SPA (History API)
 
-A `trackPageView` call without the context is silently dropped from the user's perspective: no console error from the tracker, but every SPA navigation produces a failed request. Always include the context array on every call.
+```javascript
+const origPush = history.pushState;
+history.pushState = function (...args) { origPush.apply(this, args); trackWireboardRoute(); };
+const origReplace = history.replaceState;
+history.replaceState = function (...args) { origReplace.apply(this, args); trackWireboardRoute(); };
+window.addEventListener('popstate', () => trackWireboardRoute());
+```
 
-The `if (!publisher) return;` guard in each pattern above is defense-in-depth: it skips the call entirely when the meta tag is missing, so no failed requests get sent.
+Routers often call `replaceState` without changing the page: the helper ignores those.
+
+## Why every pageview needs the publisher context
+
+The collector rejects a pageview whose context has no `wb:io.wireboard/publisher` entry: HTTP 400 `publisher not found`. If the `appId` and publisher do not belong together (for example the meta tag holds another team's UUID), the answer is HTTP 403 `invalid publisher or appid`. Always pass the context array, as the helper does.

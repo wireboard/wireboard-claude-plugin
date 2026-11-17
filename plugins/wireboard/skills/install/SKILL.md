@@ -1,106 +1,118 @@
 ---
 name: install
-description: Install WireBoard analytics in a codebase, or debug an existing WireBoard integration that isn't working. Covers the tracking script for pageviews, SPA client-side route tracking, custom events (declarative or programmatic), the official Google Tag Manager template, the dataLayer bridge, and a step-by-step troubleshooting flow.
+description: Install WireBoard analytics in a codebase, or debug an existing WireBoard integration that isn't working. Covers the tracking script for pageviews, client-side (SPA) navigation tracking, custom events (declarative or programmatic), cookie consent, the official Google Tag Manager template, the dataLayer bridge, and a step-by-step troubleshooting flow.
 when_to_use: |
-  Use when the user mentions: install wireboard, add wireboard, wireboard.io, wireboardEvent, data-wireboard-event, wireboard tracking, wireboard SPA, set up custom events, track button click with wireboard, wireboard via GTM, wireboard tag manager template. ALSO use for debugging: events aren't firing, no events, events not working, wireboard not tracking, pageviews missing, wireboard dashboard empty, tracking not working, wireboardEvent does nothing. Do NOT use for general analytics unrelated to WireBoard, or for the public REST/Live API (point users at the @wireboard/api or wireboard-api SDKs instead).
+  Use when the user mentions: install wireboard, add wireboard, wireboard.io, wireboardEvent, data-wireboard-event, wireboard tracking, wireboard SPA, wireboard cookie consent, set up custom events, track button click with wireboard, wireboard via GTM, wireboard tag manager template. ALSO use for debugging: events aren't firing, no events, events not working, wireboard not tracking, pageviews missing, wireboard dashboard empty, tracking not working, wireboardEvent does nothing, site not connected. Do NOT use for general analytics unrelated to WireBoard. Questions about the user's traffic numbers are answered with the WireBoard MCP tools, not this skill.
 argument-hint: "[install | events | debug]"
 ---
 
-# WireBoard Integration
+# WireBoard integration
 
-## Hard rules (apply throughout this skill)
+## Working rules
 
-1. **Never fabricate values.** The `appId`, the per-site collector URL, and the Publisher UUID all come from the user's WireBoard dashboard. Ask the user to paste their snippet; never template one with placeholder IDs.
-2. **Never invent collector request paths.** When asking the user to verify in DevTools Network tab, filter by **collector hostname** (the value from `newTracker`, e.g. `pipeline-0.collector.wireboard.io`, or `127.0.0.1:8080` for local dev). Never mention specific paths like `/i` or `/tp2`. The exact request path is an internal detail users do not need to see.
-3. **Never name any upstream tracker library.** Refer to the script as "the WireBoard tracker" or `wireboard.js`. WireBoard is its own product.
-4. **Never inspect tracker source** ("let me look at events.min.js to see what it expects"). This skill IS the API contract. The source is minified and reading it wastes the user's time. Use the reference files below.
-5. **Never leak internal architecture** (queue sizes, retry counts, observer types, dispatch internals). Document only what a developer can act on.
-6. **Always verify after implementing.** Don't declare done until the user has loaded their site, driven the tracked interaction, and confirmed they see a request to the collector hostname returning HTTP 200 (or you have walked them through this check).
+1. **Never invent values.** The `appId`, the collector hostname and the Publisher UUID come from the user's WireBoard dashboard. Ask the user to paste their snippet; never write one with placeholder IDs.
+2. **Paste the snippet unchanged.** Same quotes, same spacing (see [`tracking-script.md`](tracking-script.md), "Paste it exactly as given").
+3. **In DevTools, filter by the collector hostname** (the value in the user's `newTracker` call, e.g. `pipeline-0.collector.wireboard.io`). The request paths do not matter for debugging.
+4. **Call the script "the WireBoard tracker" or `wireboard.js`.**
+5. **Use this skill as the API reference.** It documents every option and message a developer needs; reading the minified `wireboard.js` or `events.min.js` does not help.
+6. **Test in a visible browser.** Headless browsers (Playwright or Puppeteer in headless mode) are filtered as bots: their hits get HTTP 200 and are never counted. If you test with a browser tool, launch it with `headless: false`, or ask the user to click through the site.
+7. **Always verify after implementing** (Step 5). Don't call it done before a real visit shows up in WireBoard.
 
 ## What WireBoard ships
 
-Two scripts, both loaded from `https://static.wireboard.io/`:
+Two scripts, both from `https://static.wireboard.io/`:
 
-- **`wireboard.js`**: the tracking script. Captures pageviews, sessions, visitors. One per site.
-- **`events.min.js`**: optional. Adds custom event tracking (button clicks, form submits, purchases) account-wide.
+- **`wireboard.js`**: the tracking script. Pageviews, sessions, visitors. One per site.
+- **`events.min.js`**: optional. Custom events (clicks, form submits, purchases).
 
-Two identifiers the user must provide (never invent these):
+Two identifiers the user must provide (never invent them):
 
-| Identifier             | Format                                      | Where to get it                                                                   |
-| ---------------------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Site UID (`appId`)** | 8-char ID (e.g. `AbCd1234`)                 | Embedded in the user's tracking snippet on their site's Install page              |
-| **Publisher UUID**     | UUID v4                                     | Settings, Integrations: [wireboard.io/dashboard/settings/integrations](https://wireboard.io/dashboard/settings/integrations). Also embedded in the snippet. |
+| Identifier | Format | Where to get it |
+| ---------- | ------ | --------------- |
+| **Site ID (`appId`)** | 8 characters (e.g. `AbCd1234`) | In the tracking snippet, on the site's Install page |
+| **Publisher UUID** | UUID | In the same snippet (`publisher:'...'` in `customContext`). Settings, Integrations also shows one, but it is the selected team owner's: with another team selected it is wrong, and every hit is refused with HTTP 403. Prefer the snippet. |
 
 ## Workflow
 
-Follow this in order. Detailed reference for each step is in the linked file.
+Follow this in order. Details for each step are in the linked file.
 
-### Step 1: Confirm scope and detect the framework
+### Step 1: Scope and framework
 
 Ask the user:
-- Do they want tracking only, custom events only, or both?
-- Have they already created a site in their WireBoard dashboard? If yes, point them to the site manager (opens the site modal directly): [wireboard.io/dashboard?action=site-edit](https://wireboard.io/dashboard?action=site-edit), select site, click Install to copy the snippet. (Alternative: [wireboard.io/dashboard](https://wireboard.io/dashboard), click Manage your Sites in the sidebar.) If they don't have a site yet, they need to create one first via the same dashboard.
+- Tracking only, custom events only, or both?
+- Do they have a WireBoard site yet? If yes, the snippet is in the site manager: [wireboard.io/dashboard?action=site-edit](https://wireboard.io/dashboard?action=site-edit), select the site, click **Install**. If they have no account: [wireboard.io/register](https://wireboard.io/register) (free plan available), then create the site.
 
-Detect their framework by reading `package.json`, `composer.json`, `Gemfile`, `nuxt.config.*`, `astro.config.*`, `next.config.*`, or by listing the project root. Confirm with the user before editing.
+Detect the framework from `package.json`, `composer.json`, `Gemfile`, `nuxt.config.*`, `astro.config.*`, `next.config.*`, `angular.json` or the project root. Confirm with the user before editing.
 
 ### Step 2: Install the tracking script
 
-**If the site already uses Google Tag Manager, mention that they have a choice:** install via the official WireBoard GTM template (no code changes, managed entirely from GTM) or install via the code snippet like any other site. Neither is mandatory just because GTM is present. Detect GTM by grepping the codebase for `googletagmanager.com/gtm.js` or a `GTM-` container ID, or just ask. If the user picks the GTM path, see [`gtm.md`](gtm.md) and skip the rest of this step. If they pick the code path or there is no GTM, continue below.
+**If the site already uses Google Tag Manager**, offer the choice: the official WireBoard GTM template (no code change, managed in GTM) or the code snippet. Neither is required just because GTM is present. Detect GTM by searching for `googletagmanager.com/gtm.js` or a `GTM-` container ID, or ask. For the GTM path see [`gtm.md`](gtm.md) and skip the rest of this step.
 
-Ask the user to paste their tracking snippet. **Paste it verbatim** into the right entry point for their framework.
+Ask the user to paste their snippet and add it, unchanged, to the right place for their framework.
 
-**Also ask: does the site have a cookie consent banner?** If yes, the correct pattern is to load the tracker cookieless and upgrade on consent (not the default cookie-mode snippet). See the "Consent banner flow" section in [`tracking-script.md`](tracking-script.md). If no banner, paste the snippet as-is (default cookie mode) or switch to static cookieless if the site is privacy-first.
+**Ask whether the site has a cookie consent banner.** If it does, the tracker should start cookieless and switch to cookies on consent, with erase-and-reload on withdrawal. Also check the storage options in the pasted snippet: `useCookies: false` alone still stores a visitor ID in local storage.
 
-Read [`tracking-script.md`](tracking-script.md) for: the snippet anatomy (what each line does), the per-framework install table (Next.js App and Pages Router, Nuxt 3, SvelteKit, Remix, Astro, Vite, Laravel, Rails, Django, plain HTML, WordPress, Wix and Squarespace), and the three cookie modes (default cookie / static cookieless / banner flow with `upgradeStorage` + revoke).
+Read [`tracking-script.md`](tracking-script.md) for the snippet anatomy, the install location per framework (Next.js, Nuxt, SvelteKit, React Router, Astro, Vite, Angular, Laravel and Inertia, Rails, Django, plain HTML, WordPress, Wix, Squarespace), and the storage modes and consent flow.
 
-### Step 3: SPA route tracking (REQUIRED for SPAs)
+### Step 3: Client-side navigation (required when the site navigates without full page loads)
 
-If the project is a SPA (React, Next.js, Vue, Nuxt, SvelteKit, Remix, or Astro with client-side routing via `<ClientRouter />` on Astro 5+ or `<ViewTransitions />` on Astro 3-4), the snippet only fires ONE pageview on initial load. Client-side navigations need explicit wiring.
+The snippet counts only the first page. Single-page apps and client-side navigation need explicit wiring: React and Next.js, Vue and Nuxt, SvelteKit, Angular, React Router, TanStack Router, Astro with `<ClientRouter />`, Laravel Inertia, Rails with Turbo Drive (the Rails 7+ default), and Livewire `wire:navigate`.
 
-For SPAs, you MUST do BOTH:
-1. Add the `<meta name="wireboard-publisher" content="UUID">` tag to `<head>` (the SPA route wiring reads the UUID from there). Required even if the user does not want custom events.
-2. Wire up the framework's router hook to call `trackPageView` on each navigation. Patterns per framework are in [`spa-routing.md`](spa-routing.md).
+You must do BOTH:
+1. Add `<meta name="wireboard-publisher" content="UUID">` to `<head>`, even if the user wants no custom events.
+2. Add the shared helper and call it from the router hook, as shown in [`spa-routing.md`](spa-routing.md).
 
-Skipping either step rejects every client-side pageview with HTTP 400 `publisher not found`.
+Without the meta tag, navigations are silently not counted (no request, no error).
 
-**If the user chose the GTM template install path in Step 2 AND the site is a SPA**, the GTM Initialization tag only fires on full page loads, so client-side navigations are NOT tracked out of the box. Tell the user honestly: either add the `<meta>` tag and router hook above to the codebase (the template's `wireboardSetPublisher` call sets the publisher in memory, so `window.wireboard('trackPageView', ...)` from a router hook will work), or accept session-only pageviews. There is no pure-GTM way to track SPA route changes with the current template.
+**GTM path and a single-page app**: the GTM Initialization tag runs on full page loads only. Either add the meta tag and router hook to the codebase, or add the Custom HTML tag on a History Change trigger described in [`gtm.md`](gtm.md).
 
-### Step 4: Custom events (only if the user wants them)
+### Step 4: Custom events (only if wanted)
 
-If the user wants custom event tracking:
+1. Add `<script src="https://static.wireboard.io/events.min.js"></script>` to `<head>`, after the main snippet.
+2. Add `<meta name="wireboard-publisher" content="UUID">` if not already there.
+3. Instrument the events, in one of two styles:
+   - **Declarative**: `data-wireboard-event-*` attributes, for static HTML and templates.
+   - **Programmatic**: `window.wireboardEvent({...})`, for React, Vue, Svelte, Angular and any component that mounts and unmounts.
 
-1. Add `<script src="https://static.wireboard.io/events.min.js"></script>` to `<head>`, AFTER the main tracking snippet.
-2. Add `<meta name="wireboard-publisher" content="UUID">` if not already present.
-3. Instrument the events. Two styles:
-   - **Declarative**: `data-wireboard-event-*` HTML attributes. Use for static HTML and templates.
-   - **Programmatic**: `window.wireboardEvent({...})` calls. **Use for React, Vue, Svelte, and any component that mounts and unmounts dynamically.**
-
-Full anatomy (fields, value normalization, props rules, the 30/300/2000 limits, reserved keys, PII rules, casing consistency, declarative attribute names, programmatic API signature, framework examples, GTM dataLayer mirror) is in [`custom-events.md`](custom-events.md). Read it before writing any event code. The API uses `{category, action, label, value, props}`, NOT `{name, props}`.
+Read [`custom-events.md`](custom-events.md) before writing event code: fields, value normalization, props rules, the 30/300/2000 limits, reserved keys, PII rules, casing, attribute names, the API signature, framework examples and the GTM dataLayer mirror. The API takes `{category, action, label, value, props}`, NOT `{name, props}`.
 
 ### Step 5: Verify
 
-Walk the user through this check:
+1. Open the site in a normal, visible browser window (a private window without extensions is best). Not a headless browser.
+2. DevTools, Network tab, filter by the **collector hostname**. Reload: at least one request to it should return HTTP 200. For a single-page app, navigate: one more request per page.
+3. For custom events, trigger one: an extra request appears.
+4. **A 200 alone does not prove the visit was counted** (bots and IPs on the IP Ignore List also get 200). Confirm in WireBoard:
+   - a new site's onboarding has a **Verify Installation** step that shows "Traffic Detected!" when the first visit arrives;
+   - or the dashboard's real-time view shows the visit within seconds;
+   - or, if the WireBoard MCP tools are connected (see below), call `get_live_state` for the site (paid plans) or `get_aggregate` with range `today`.
+5. After testing, the user can add their own IP to the site's IP Ignore List so their visits stop counting. Not before: it would hide the test visits.
 
-1. Open the site in a fresh browser tab (preferably a private window with no extensions).
-2. Open DevTools, Network tab, filter by their **collector hostname** (the value from the `newTracker` call in their snippet, e.g. `pipeline-0.collector.wireboard.io`).
-3. Reload the page. They should see at least one request to that hostname returning HTTP 200.
-4. If they're testing custom events, trigger one (click the tracked button, submit the tracked form). They should see an additional request.
-5. The WireBoard dashboard's site detail page will show "Tracking installed" once it receives the first hit.
+The site manager's "connected" icon is a separate check of the homepage HTML: it stays off for GTM installs and for snippets added through JavaScript, even when tracking works.
 
-If anything doesn't work, go to [`troubleshooting.md`](troubleshooting.md). DO NOT improvise debugging steps from general analytics knowledge; the WireBoard-specific failure modes (HTTP 400 publisher gate, the SPA route hook, the meta tag requirement) are documented there.
+If something fails, go to [`troubleshooting.md`](troubleshooting.md) rather than improvising: the WireBoard-specific failure modes (publisher context, meta tag, bot filter, quota) are listed there.
+
+## WireBoard analytics tools (MCP)
+
+This plugin also connects Claude to the user's WireBoard data through the WireBoard MCP server: sites, period totals, time series, daily history, breakdowns (country, device, referrer, page...), top URLs, custom event queries and the live snapshot. All tools are read-only.
+
+They need an API token. If a tool answers "No WireBoard API token is set", tell the user:
+
+1. Create a token at [wireboard.io/dashboard/settings/api](https://wireboard.io/dashboard/settings/api) with the `analytics:read` ability (and `live:read` for the live snapshot).
+2. In Claude Code, run `/plugin`, open the **Installed** tab, select **WireBoard**, choose **Configure options**, and paste the token. Then run `/reload-plugins` or restart Claude Code.
+
+The live snapshot needs a paid plan; on the free plan, history queries cover the last 30 days. The tools say so when a limit applies.
 
 ## Reference files
 
-Load these on demand for the work in each step. Do not copy their content into your reply unless quoting a small block.
+Load these when the step needs them. Quote only small parts in replies.
 
-- [`tracking-script.md`](tracking-script.md): per-framework install patterns + snippet anatomy + cookieless mode
-- [`gtm.md`](gtm.md): install via the official Google Tag Manager template (no code changes, Init + Custom Event tags, dataLayer auto-capture, consent flow)
-- [`spa-routing.md`](spa-routing.md): client-side route tracking for React, Next, Vue, Nuxt, SvelteKit, Remix, Astro, vanilla History API
-- [`custom-events.md`](custom-events.md): event anatomy, declarative attributes, programmatic API, value normalization, props rules and limits, casing, framework examples, dataLayer mirror
-- [`troubleshooting.md`](troubleshooting.md): diagnostic flow when integration isn't working + symptom table
+- [`tracking-script.md`](tracking-script.md): snippet anatomy, install location per framework, storage modes, consent flow
+- [`gtm.md`](gtm.md): install through the official Google Tag Manager template, consent with GTM, single-page apps with GTM
+- [`spa-routing.md`](spa-routing.md): the shared navigation helper and its wiring per framework
+- [`custom-events.md`](custom-events.md): event fields, declarative attributes, programmatic API, value normalization, props rules and limits, framework examples, dataLayer mirror
+- [`troubleshooting.md`](troubleshooting.md): diagnostic flow, collector responses, console messages, symptom table
 
-## What this skill does NOT cover
+## Not covered here
 
-- The WireBoard public REST and Live (SSE) APIs. Point users at the [`@wireboard/api`](https://www.npmjs.com/package/@wireboard/api) (JS/TS) or [`wireboard-api`](https://pypi.org/project/wireboard-api/) (Python) SDKs and the [API docs](https://wireboard.io/docs/api-overview).
-- The WireBoard MCP server. See [`@wireboard/mcp`](https://www.npmjs.com/package/@wireboard/mcp).
+- Building your own integration in code: the [`@wireboard/api`](https://www.npmjs.com/package/@wireboard/api) (JavaScript/TypeScript) and [`wireboard-api`](https://pypi.org/project/wireboard-api/) (Python) SDKs and the [API docs](https://wireboard.io/docs/api-overview).
 - General analytics not specific to WireBoard.

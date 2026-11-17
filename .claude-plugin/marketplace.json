@@ -1,19 +1,39 @@
 {
   "name": "wireboard",
-  "description": "WireBoard's official Claude Code plugins. Install WireBoard analytics in any codebase.",
+  "description": "WireBoard's official Claude Code plugins: query your WireBoard analytics and install WireBoard in any codebase.",
   "owner": {
     "name": "WireBoard"
   },
   "plugins": [
     {
       "name": "wireboard",
-      "displayName": "WireBoard",
+      "displayName": "WireBoard Analytics MCP",
       "source": "./plugins/wireboard",
-      "description": "Install the WireBoard tracking script and custom events in any codebase, or via the official Google Tag Manager template.",
+      "description": "Ask Claude about your website traffic, and let it install WireBoard analytics for you: live and historical visitors, pages, referrers and custom events in plain language, plus framework-aware setup of tracking, SPA routing, custom events and cookie consent.",
       "homepage": "https://wireboard.io/docs/claude-plugin",
       "repository": "https://github.com/wireboard/wireboard-claude-plugin",
       "license": "MIT",
-      "keywords": ["wireboard", "analytics", "tracking", "custom-events", "gtm", "google-tag-manager"]
+      "keywords": [
+        "wireboard",
+        "analytics",
+        "web-analytics",
+        "mcp",
+        "tracking",
+        "custom-events",
+        "gtm",
+        "google-tag-manager",
+        "cookieless",
+        "consent"
+      ],
+      "category": "monitoring",
+      "tags": [
+        "analytics",
+        "web-analytics",
+        "mcp",
+        "privacy",
+        "tracking",
+        "google-tag-manager"
+      ]
     }
   ]
 }

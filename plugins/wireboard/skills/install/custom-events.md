@@ -16,7 +16,7 @@ Tracks button clicks, form submissions, purchases, video plays, and any other us
    <meta name="wireboard-publisher" content="YOUR-PUBLISHER-UUID">
    ```
 
-   The Publisher UUID is the same one embedded in the tracking snippet's `customContext`. Extract it from what the user pasted, or ask.
+   Take the UUID from the snippet the user pasted (`publisher:'...'` in `customContext`). Settings, Integrations shows the UUID of the currently selected team's owner: with another team selected it is the wrong one, and every event is refused.
 
 Without the meta tag, every tracked element must carry the Publisher UUID via `data-wireboard-event-<type>-publisher="UUID"`, `data-wireboard-event-publisher="UUID"`, or the legacy `data-wireboard-publisher="UUID"`. The meta tag is preferred.
 
@@ -38,15 +38,17 @@ Every event has these fields:
 
 ## Value normalization
 
-The `value` field is **always normalized to a 2-decimal float string** before being sent. Don't expect arbitrary strings to survive:
+The `value` field is **always normalized to a 2-decimal string** before being sent. Pass a plain number whenever you can:
 
-- `"49.99"` → `"49.99"`
-- `"49,99"` → `"49.99"` (European decimal handled)
-- `"$1,234.56"` → `"1234.56"` (currency symbol and thousands stripped)
+- `49.99` or `"49.99"` → `"49.99"`
 - `"120"` → `"120.00"` (always 2 decimals)
-- non-numeric, `NaN`, or `|num| > 1e9` → `"0.00"` + console warning
+- `"49,99"` → `"49.99"` (a comma followed by exactly 2 digits is read as a decimal comma)
+- `"$1,234.56"` → `"1234.56"` (`$`, `€`, `£`, `¥` and thousands commas are removed)
+- `"1.234,56"` → `"1.23"` (wrong: dot thousands separators are not understood)
+- `"CHF 10"`, `"10 EUR"` and other currency codes → `"0.00"`
+- no value, non-numeric, `NaN`, or larger than 1e9 → `"0.00"` (the non-numeric cases log `Invalid or unreasonable number detected`)
 
-For non-currency quantities (seconds watched, items in cart, score), pass as a number; `value` stores it with 2 decimals. For non-numeric dimensions (color, size, plan tier), use `props` instead.
+So convert prices to a number in code (`49.99`, not a formatted string). For non-currency quantities (seconds watched, items in cart, score), pass a number too. For non-numeric dimensions (color, size, plan tier), use `props`.
 
 ## Custom properties (`props`)
 
@@ -190,7 +192,9 @@ Guard the call in case the script has not loaded yet (ad blockers):
 window.wireboardEvent?.({ category: 'user', action: 'login' });
 ```
 
-Returns `true` if accepted, `false` if rejected (missing required fields, no Publisher ID resolvable, or session cap reached). Check the return value if you want to confirm the call landed; in most code paths fire-and-forget is fine.
+Returns `true` if accepted, `false` if rejected (missing required fields, no Publisher ID resolvable, or session cap reached). `true` means the browser queued the event, not that it was counted: see "Verify" in [`SKILL.md`](SKILL.md). In most code paths fire-and-forget is fine.
+
+`events.min.js` defines `window.wireboardEvent` itself and holds events until `wireboard.js` is ready, so the load order of the two scripts does not break it; loading it after the snippet is still the recommended order.
 
 ### React: click handler
 
@@ -278,7 +282,9 @@ function track() {
 </template>
 ```
 
-### Svelte
+### Svelte 5
+
+Svelte 5 uses `onclick` (the older `on:click` directive is deprecated). Match the project's Svelte version.
 
 ```svelte
 <script>
@@ -291,7 +297,7 @@ function track() {
 }
 </script>
 
-<button on:click={track}>Get started</button>
+<button onclick={track}>Get started</button>
 ```
 
 ### TypeScript
@@ -349,11 +355,11 @@ The mirror handles three push shapes:
 
 | Shape | Example | Mapping |
 | ----- | ------- | ------- |
-| GA4 standard event | `dataLayer.push({event: 'purchase', value: 49.99, currency: 'EUR', items: [...]})` | Mapped to curated `{category, action, label, value, props}` for ~25 well-known GA4 events: `purchase`, `refund`, `add_to_cart`, `view_cart`, `begin_checkout`, `sign_up`, `login`, `share`, `search`, `scroll`, `video_start`, `video_progress`, `video_complete`, `file_download`, `form_start`, `form_submit`, etc. |
+| GA4 standard event | `dataLayer.push({event: 'purchase', value: 49.99, currency: 'EUR', items: [...]})` | Mapped to curated `{category, action, label, value, props}` for 28 GA4 events: `purchase`, `refund`, `add_to_cart`, `remove_from_cart`, `view_cart`, `begin_checkout`, `add_shipping_info`, `add_payment_info`, `view_item`, `view_item_list`, `select_item`, `add_to_wishlist`, `sign_up`, `login`, `share`, `search`, `generate_lead`, `contact`, `subscribe`, `scroll`, `click` (recorded as `engagement` / `outbound_click`), `view_search_results`, `video_start`, `video_progress`, `video_complete`, `file_download`, `form_start`, `form_submit`. |
 | UA-style legacy | `dataLayer.push({event: 'name', eventCategory: 'x', eventAction: 'y', eventLabel: 'z', eventValue: 1})` | Pass-through to the same `category`/`action`/`label`/`value`. Remaining fields become props. |
 | Unknown event | `dataLayer.push({event: 'my_custom_name', foo: 'bar'})` | `category: 'custom'`, `action: <eventName>`, remaining fields become props |
 
-**For dataLayer pass-through only**, PII-flavored keys are auto-stripped from props before send: `email`, `user_email`, `email_address`, `phone`, `phone_number`, `mobile`, `first_name`, `last_name`, `name`, `full_name`, `user_name`, `address`, `street`, `city`, `state`, `zip`, `postal_code`, `ssn`, `credit_card`, `card_number`, `cvv`, `password`. GTM-internal events (`gtm.js`, `gtm.dom`, `gtm.load`, `gtm.click`, `gtm.formSubmit`, `gtm.historyChange`, `optimize.*`, `consent`) and `page_view` (the WireBoard tracker already handles pageviews) are skipped. Objects/arrays in custom params are dropped from props (only scalars pass through).
+**For dataLayer pass-through only**, PII-flavored keys are auto-stripped from props before send: `email`, `user_email`, `email_address`, `phone`, `phone_number`, `user_phone`, `mobile`, `first_name`, `last_name`, `name`, `full_name`, `user_name`, `address`, `street`, `city`, `state`, `zip`, `postal_code`, `ssn`, `social_security`, `credit_card`, `card_number`, `cvv`, `cvc`, `password`, plus every key starting with `gtm.`. `user_id` is deliberately kept (GA4 uses it across devices): if the site pushes a `user_id` that identifies a person, add it to `denyParams` (below). GTM-internal events (`gtm.js`, `gtm.dom`, `gtm.load`, `gtm.click`, `gtm.linkClick`, `gtm.formSubmit`, `gtm.scrollDepth`, `gtm.video`, `gtm.timer`, `gtm.triggerGroup`, `gtm.elementVisibility`, `gtm.historyChange`, `gtm.init`, `gtm.init_consent`, `optimize.*`, `consent`) and `page_view` (the WireBoard tracker already counts pageviews) are skipped. Objects and arrays in custom params are dropped from props (only scalars pass through).
 
 > **This auto-strip applies ONLY to the dataLayer mirror path.** Direct `wireboardEvent({props: {...}})` calls and `data-wireboard-event-prop-*` attributes are NOT auto-stripped. PII handling is your responsibility on those paths.
 

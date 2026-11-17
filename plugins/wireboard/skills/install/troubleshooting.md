@@ -1,99 +1,107 @@
 # Troubleshooting
 
-When the WireBoard integration isn't working ("events aren't firing", "no pageviews", "dashboard empty"), walk the user through this diagnostic flow IN ORDER. Do NOT propose reading `wireboard.js` or `events.min.js` source; the API contract is documented in this skill's reference files and the symptom table below covers every known failure mode.
+When the integration seems broken ("events aren't firing", "no pageviews", "dashboard empty"), walk the user through this flow in order. The API contract is in this skill's reference files, so there is no need to read the minified `wireboard.js` or `events.min.js`.
 
-## Quick diagnostic flow ("nothing is working")
+## First: how are you testing?
 
-Ask the user to open DevTools and check in this order. Don't skip steps.
+Ask this before anything else. Two things make working tracking look broken:
 
-### 1. Is the snippet actually on the page?
+- **Headless or automated browsers are filtered as bots.** Visits from headless Chrome (Playwright or Puppeteer in headless mode, Lighthouse, crawlers) get an HTTP 200 like any other hit and are never counted. That is on purpose. Test in a normal, visible browser; with Playwright or Puppeteer, launch with `headless: false`. If you (Claude) want to test with a browser tool, use a visible one or ask the user to click through the site.
+- **IP Ignore List.** If the tester's IP is on the site's IP Ignore List (site settings), their hits also get a 200 and are dropped. Changes to the list take up to 5 minutes. Advise adding one's own IP only after testing is done.
 
-In the browser, view source (Ctrl+U / Cmd+U) on the affected page. Search for `wireboard tag` or `wireboard.io`. If it's not there:
-- The snippet was never added, OR
-- The build pipeline stripped it (check the prod-vs-dev section below)
+Also: the WordPress plugin does not track logged-in WordPress users by default. Test logged out or in a private window.
+
+## Diagnostic flow
+
+### 1. Is the snippet on the page?
+
+View source (Ctrl+U / Cmd+U) and search for `wireboard tag` or `static.wireboard.io`. If missing, the snippet was never added or the build removed it (see "Works in dev, not in prod" below).
 
 ### 2. Is the tracking script loading?
 
-DevTools, **Network tab**, filter by `wireboard.js`. Reload the page. You should see one request to `https://static.wireboard.io/wireboard.js` returning HTTP 200. If not:
-- 404 / blocked: an extension (ad blocker, privacy tool) is blocking `static.wireboard.io`. Test in a private window with no extensions.
-- Not loaded at all: the snippet isn't running because it's outside `<head>`, or it's in a code path that didn't execute (server-only rendering, etc.).
+DevTools, **Network** tab, filter `wireboard.js`, reload. Expect one request to `https://static.wireboard.io/wireboard.js` with HTTP 200.
+- Blocked or failed: an extension (ad blocker, privacy tool) or a Content-Security-Policy is blocking `static.wireboard.io`. Test in a private window without extensions; check the CSP header.
+- Not requested at all: the snippet did not run (outside `<head>`, server-only code path, or a script-blocking consent tool).
 
-### 3. Are tracking requests going out?
+### 3. Are hits reaching the collector?
 
-DevTools, **Network tab**, filter by the **collector hostname** from the `newTracker` call in the snippet (e.g. `pipeline-0.collector.wireboard.io`, or `127.0.0.1:8080` for local dev). Reload the page. You should see at least one request to that hostname.
+Network tab, filter by the **collector hostname** from the `newTracker` call (e.g. `pipeline-0.collector.wireboard.io`), reload.
 
-- **No requests at all**: the snippet ran but `trackPageView` didn't fire. Check the console (next step).
-- **Request shows HTTP 400 `publisher not found`**: missing publisher customContext. The snippet's `customContext` block is wrong or the SPA route hook is calling `trackPageView` without context. See "HTTP 400" in the symptom table.
-- **Request shows HTTP 403 `invalid publisher or appid`**: the `(appId, publisher)` pair doesn't match a real site on the user's account. Check both values against the WireBoard dashboard.
-- **Request shows HTTP 200**: tracking is working at the network layer. If the dashboard still appears empty, see "Events accepted but dashboard empty" in the symptom table.
+| Response | Meaning | Fix |
+| -------- | ------- | --- |
+| No request | The snippet ran but sent nothing | Check the console (step 4). For client-side navigations, check the router wiring and the publisher meta tag ([`spa-routing.md`](spa-routing.md)). |
+| HTTP 200 | Received. Counted, unless the visitor is a bot or headless browser, or the IP is on the IP Ignore List (see above) | If the dashboard stays empty, see "Hits return 200 but nothing appears" below. |
+| HTTP 400 `publisher not found` | The pageview had no publisher context | Pass the `customContext` array on every `trackPageView` call ([`spa-routing.md`](spa-routing.md)). |
+| HTTP 400 `appid is required` / `context is required` | The snippet was edited and lost its `appId` or its context | Paste the original snippet again, unchanged. |
+| HTTP 403 `invalid publisher or appid` | The `appId` and Publisher UUID do not belong together | Use the UUID from the site's own snippet. The one in Settings, Integrations belongs to the selected team's owner and is wrong when another team is selected. |
+| HTTP 403 `quota exceeded` | The plan's monthly pageview quota is used up | Check usage in the dashboard's settings (Usage); upgrade the plan or wait for the next period. Nothing is wrong with the code. |
+| HTTP 403 `forbidden` | The request was refused before processing | Check the snippet is unmodified and the site exists in the dashboard. If it persists, contact WireBoard support. |
+| HTTP 415, 500, 503 | A problem on WireBoard's side, usually temporary | Try again a little later. If it lasts, contact WireBoard support. |
 
-### 4. Any console errors?
+### 4. Console messages
 
-DevTools, **Console tab**, filter by `wireboard`. Look for any of:
-- `Invalid publisher ID provided`: publisher UUID is missing or empty. Add or fix the `<meta name="wireboard-publisher">` tag, or pass `publisher:` per call.
-- `Valid publisher is required`: same issue, different code path (custom events).
-- `Both category and action are required`: a `wireboardEvent()` call is missing one of the two required fields.
-- `prop "..." collides with UTM namespace`: a prop key used one of the reserved UTM names. Rename it.
-- `Session event limit reached`: 1000 events per session has been hit. Reload to reset.
+DevTools, **Console** tab. Do not filter by "wireboard": most messages do not contain that word. Look for:
 
-### 5. Is `wireboardEvent` actually defined?
+| Message | Meaning |
+| ------- | ------- |
+| `Invalid publisher ID provided` | The `<meta name="wireboard-publisher">` tag, or a `wireboardSetPublisher()` call, holds an empty or malformed UUID. |
+| `Valid publisher is required` | A custom event had no publisher: add the `<meta name="wireboard-publisher">` tag or pass `publisher:`. |
+| `Both category and action are required` | A `wireboardEvent()` call is missing one of the two. |
+| `wireboardEvent: prop "..." collides with UTM namespace` | A prop used a reserved `utm_*` key. Rename it. |
+| other `wireboardEvent: ...` warnings | Props over the limits (30 keys, 300-character keys, 2000-character values) or non-scalar values. See [`custom-events.md`](custom-events.md). |
+| `Invalid or unreasonable number detected` | A `value` could not be read as a number and was sent as `0.00`. |
+| `Session event limit reached, dropping event` | 1000 custom events in this session. Reload to reset. |
+| `Wireboard not available, requeueing event` | `wireboard.js` is not loaded (blocked, or the snippet is missing). Events wait for it. |
+| `Circuit breaker active, dropping event` / `Circuit breaker active. Next attempt in ...` | Sending failed repeatedly (network or blocker); events are paused for a while. |
 
-In the **Console tab**, type:
+### 5. Is `wireboardEvent` defined?
 
-```javascript
-window.wireboardEvent
-```
+In the console: `window.wireboardEvent`. If `undefined`, `events.min.js` did not load: check the `<script src="https://static.wireboard.io/events.min.js"></script>` tag is present and returns HTTP 200 (Network tab). Its order relative to the snippet does not matter for this.
 
-If it returns `undefined`, `events.min.js` never loaded. Check:
-- The `<script src="https://static.wireboard.io/events.min.js"></script>` line is in `<head>`
-- It's AFTER the main tracking snippet, not before
-- It returns HTTP 200 (Network tab, filter `events.min.js`)
-
-If it returns a function, the API is ready.
-
-### 6. Can you fire an event manually?
-
-In the Console tab:
+### 6. Fire an event by hand
 
 ```javascript
 window.wireboardEvent({ category: 'test', action: 'click' })
 ```
 
-- Returns `true` → call was accepted. Check the collector network filter for the resulting request.
-- Returns `false` → look in console for the rejection reason and find it in the symptom table.
+- `true`: queued. A request to the collector hostname should follow (step 3).
+- `false`: rejected. The console says why (step 4).
 
-### 7. Is the meta tag present?
-
-In the Console tab:
+### 7. Is the publisher meta tag present?
 
 ```javascript
 document.querySelector('meta[name="wireboard-publisher"]')?.getAttribute('content')
 ```
 
-If it returns `null`, the meta tag isn't in `<head>`. Every event call will be rejected with `Valid publisher is required`. Add the tag.
+`null` means the tag is missing: custom events are refused with `Valid publisher is required`, and client-side navigations are not counted at all (no request, no error).
 
-If all seven pass and the dashboard still appears empty, the calls ARE landing client-side: see "Events accepted but dashboard empty" below.
+## Hits return 200 but nothing appears
+
+In order:
+
+1. **Bot filter or IP Ignore List** (see the top of this page). The most common cause when an AI agent or a script did the testing.
+2. **Wrong place or period**: the right site selected in the dashboard, the date filter includes today.
+3. **Delay**: live views update within seconds; reports can take a minute.
+4. **Quota**: a 403 `quota exceeded` on later hits means the plan's quota ran out mid-period.
 
 ## Symptom table
 
-| Symptom                                                                          | Likely cause                                                                                                                          | Fix                                                                                                                                                                                                                                                                                       |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dashboard "Tracking installed" status never appears                              | Snippet not in `<head>`, page cached, or ad blocker                                                                                   | View source to confirm snippet is in served HTML. Clear CDN/site cache. Test in a private window without extensions.                                                                                                                                                                      |
-| SPA shows one pageview per session even though users navigate a lot              | Client-side route changes don't auto-fire `trackPageView`                                                                              | Wire up the router hook from [`spa-routing.md`](spa-routing.md) (`usePathname`, `routeChangeComplete`, `afterEach`, `afterNavigate`, etc.).                                                                                                                                               |
-| SPA route changes produce HTTP 400 `publisher not found` in Network tab          | `trackPageView` called without the publisher customContext                                                                            | Pass the customContext array `[{schema:'wb:io.wireboard/publisher', data:{publisher}}]` on every call. WireBoard rejects requests without it. See [`spa-routing.md`](spa-routing.md) for the pattern.                                                                                     |
-| SPA route changes produce HTTP 403 `invalid publisher or appid`                  | `appId` and Publisher UUID mismatch (e.g. snippet's appId is for site A, meta tag's publisher is from a different account)            | Verify the `<meta name="wireboard-publisher">` UUID matches the publisher embedded in the tracking snippet's `customContext`.                                                                                                                                                              |
-| Next.js production build fails with "Missing Suspense boundary with useSearchParams" | Used `useSearchParams()` in the route tracker without a Suspense boundary                                                              | Drop `useSearchParams` and depend only on `usePathname`. If query-param tracking is required, wrap the tracker in `<Suspense fallback={null}>`. See [`spa-routing.md`](spa-routing.md).                                                                                                   |
-| SvelteKit fires double pageview on initial load                                  | Forgot the first-render guard on `afterNavigate` (it fires on initial mount, contrary to some assumptions)                            | Add `let first = true; if (first) { first = false; return; }` guard. See [`spa-routing.md`](spa-routing.md).                                                                                                                                                                               |
-| Astro accumulates duplicate pageview events after a few transitions              | Listener registered multiple times                                                                                                    | Wrap the `addEventListener` in `if (!window.__wbAstroInit) { window.__wbAstroInit = true; ... }` so it registers exactly once. See [`spa-routing.md`](spa-routing.md).                                                                                                                      |
-| `wireboardEvent is not a function` in console                                    | `events.min.js` not loaded, or loaded before `wireboard.js`                                                                            | Check the script src loads (Network tab). Ensure `events.min.js` is AFTER the main snippet in `<head>`.                                                                                                                                                                                    |
-| Console error: `Invalid publisher ID provided` or `Valid publisher is required`  | Publisher UUID missing or empty                                                                                                       | Add `<meta name="wireboard-publisher" content="UUID">` in `<head>`, or pass `publisher:` per `wireboardEvent()` call.                                                                                                                                                                      |
-| Console warning: `prop "..." collides with UTM namespace`                        | Used `utm_source`, `utm_campaign`, etc. as a prop key                                                                                  | Rename the prop. UTMs are captured automatically when `utm: true` (the default). Override with `utm: false` per event if needed.                                                                                                                                                          |
-| Custom event shows category and action but no label                              | Label is optional; this is expected                                                                                                   | Add `label` if you want a third axis to filter by.                                                                                                                                                                                                                                        |
-| Same property splits into two keys (`cartSize` and `cartsize`)                   | Mixed declarative and JS forms for the same key (HTML lowercases, JS preserves case)                                                  | Pick one casing per key and use it everywhere. Recommended: lowercase with hyphens.                                                                                                                                                                                                         |
-| View events fire dozens of times                                                 | Declarative `data-wireboard-event="view"` on a remounting SPA component                                                                | Switch to programmatic `window.wireboardEvent` inside `useEffect` with `useInView({ triggerOnce: true })`. See [`custom-events.md`](custom-events.md).                                                                                                                                    |
-| Value shows as `0.00` in the dashboard                                           | Non-numeric string passed as `value`                                                                                                  | Use a number, or move the dimension to `props`. See "Value normalization" in [`custom-events.md`](custom-events.md).                                                                                                                                                                       |
-| Events fire but only sometimes                                                   | Ad blocker on test machine                                                                                                            | Test in a clean profile without extensions.                                                                                                                                                                                                                                                |
-| `wireboardEvent(...)` called, returns `true`, but nothing in the dashboard       | Either propagation latency (events take seconds to surface), OR the request is being dropped client-side by an extension              | Wait ~30 seconds and refresh. Open Network tab filtered by collector hostname; should see one request per call returning HTTP 200. If no request at all → ad blocker. If request returns 4xx → check the HTTP 400 / 403 rows above.                                                       |
-| `wireboardEvent(...)` returns `false` but no obvious console error               | Session event cap (1000) reached, or no publisher resolvable                                                                          | Check console for `Valid publisher is required`, `Invalid publisher ID provided`, or `Session event limit reached`. Reload the page (resets session counter). Verify the meta tag is present.                                                                                              |
-| Tracking works in dev but fails in prod                                          | Build pipeline stripped the snippet from `<head>`, OR CSP blocks the script src, OR prod environment has stricter ad blockers          | Check the prod page's served HTML (view source). Check the Content-Security-Policy response header for restrictions on `static.wireboard.io` or the collector hostname.                                                                                                                    |
-| Events accepted but dashboard empty                                              | Propagation latency, dashboard filter view, or wrong dashboard scope                                                                  | Wait ~60 seconds. Check the dashboard's date filter includes "today". Check you're looking at the right site in the dashboard sidebar.                                                                                                                                                     |
+| Symptom | Likely cause | Fix |
+| ------- | ------------ | --- |
+| The site manager shows the site as not connected, but traffic arrives | The indicator checks the homepage HTML for the exact text `appId: '<site id>'`. GTM installs, snippets injected by a JS bundle, and requoted snippets (`appId: "..."`) never match | Expected for GTM. Otherwise paste the snippet unchanged into the HTML. Rely on real traffic (Verify step in `SKILL.md`). |
+| One pageview per visit although visitors navigate | Client-side navigation not wired | [`spa-routing.md`](spa-routing.md). Also on Rails (Turbo Drive), Inertia and Livewire `wire:navigate`. |
+| Client-side navigations not counted, no errors, no requests | Publisher meta tag missing | Add `<meta name="wireboard-publisher" content="UUID">` to `<head>`. |
+| Navigations produce HTTP 400 `publisher not found` | Custom router code calls `trackPageView` without the context | Use the helper in [`spa-routing.md`](spa-routing.md). |
+| HTTP 403 `invalid publisher or appid` | UUID from another team, or `appId` of another site | Take both from the site's own snippet. |
+| HTTP 403 `quota exceeded` | Plan quota used up | Usage in the dashboard settings; upgrade or wait. |
+| Two pageviews for one navigation | Several hooks for one navigation, or custom code without de-duplication | Use only the helper from [`spa-routing.md`](spa-routing.md), called from one hook. |
+| Pageviews show the previous page's title | `trackPageView` sent before the app set the new title | Use the helper (it waits for the title). |
+| Next.js build fails with `Missing Suspense boundary with useSearchParams` | `useSearchParams()` in the route tracker | Depend on `usePathname` only, or wrap the tracker in `<Suspense fallback={null}>`. |
+| Astro counts each navigation several times | Listener registered more than once | Keep the `window.__wbAstroInit` guard ([`spa-routing.md`](spa-routing.md)). |
+| `wireboardEvent is not a function` | `events.min.js` not loaded or blocked | Check its script tag and its network request. |
+| Custom event has category and action but no label | Label is optional | Add `label` if a third level is wanted. |
+| One property split into two keys (`cartSize` and `cartsize`) | Declarative and JS forms mixed (HTML lowercases attribute names) | One casing per key everywhere; lowercase with hyphens is safest. |
+| View events fire many times | Declarative `data-wireboard-event="view"` on a component that remounts | Programmatic `wireboardEvent` with `useInView({ triggerOnce: true })` ([`custom-events.md`](custom-events.md)). |
+| Value shows `0.00` | No value, a non-numeric string, or a currency code (`CHF 10`) | Pass a number. Formats like `1.234,56` are also misread (`1.23`). See "Value normalization" in [`custom-events.md`](custom-events.md). |
+| Works in dev, not in prod | Build or CMS removed the snippet, a Content-Security-Policy blocks `static.wireboard.io` or the collector, or a consent tool blocks scripts | View the production page source; check the CSP header (`script-src` for `static.wireboard.io`, `connect-src` and `img-src` for the collector hostname). |
+| Test visits never show, real ones do | Headless test browser or IP Ignore List | See the top of this page. Never "fix" it by clearing `wireboard_*` local storage keys: that breaks visit and journey data. |

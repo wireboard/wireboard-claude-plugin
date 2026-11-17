@@ -20,9 +20,9 @@ If the site does not use GTM, do not push them to install GTM just for WireBoard
 
 ## Step 1: Install the template into GTM
 
-Two options. Use manual import for now; the Community Gallery listing is still under review at the upstream repo.
+Two options. Manual import always works; the dashboard's own install guide uses it.
 
-### Option A: Manual import (works today)
+### Option A: Manual import
 
 1. Give the user this download link:
 
@@ -37,16 +37,16 @@ Two options. Use manual import for now; the Community Gallery listing is still u
 4. Select the downloaded `template.tpl`.
 5. Save the template.
 
-### Option B: Community Template Gallery (once approved)
+### Option B: Community Template Gallery
 
-The template is under review for the GTM Community Template Gallery. Once it's listed, this becomes the simpler path:
+If the template is listed in the GTM Community Template Gallery, this is quicker:
 
 1. Open the GTM workspace.
 2. **Templates** → in the **Tag Templates** section, click **Search Gallery**.
 3. Search for **WireBoard** and click **Add to workspace**.
 4. Review the permissions prompt and accept.
 
-If the gallery search returns no result, the listing is not live yet. Fall back to Option A.
+If the gallery search returns no result, use Option A.
 
 ## Step 2: Create the Initialization tag
 
@@ -59,7 +59,7 @@ This tag loads WireBoard on every page and starts tracking. **Create exactly one
    | Field | Value |
    | --- | --- |
    | Site ID | The user's `appId` from their tracking snippet (8-char). Ask them to paste their snippet or open [the site manager](https://wireboard.io/dashboard?action=site-edit). |
-   | Publisher ID | UUID from [Settings → Integrations](https://wireboard.io/dashboard/settings/integrations). Also embedded in the snippet. |
+   | Publisher ID | The UUID in the user's tracking snippet (`publisher:'...'`). Settings, Integrations shows the selected team owner's UUID, which is wrong if another team is selected. |
    | Collector URL | Leave the default (`pipeline-0.collector.wireboard.io`) unless the snippet shows a different host. |
    | Tracking mode | **Cookie** (default) or **Cookieless**. Match the user's consent posture. If they have a consent banner, see "Consent banner flow" below. |
    | Auto-capture events from window.dataLayer (recommended) | Leave **ON** if the site already pushes GA4-style events to `window.dataLayer`. Forwards them to WireBoard automatically. |
@@ -92,26 +92,56 @@ For the event field semantics (what category vs action vs label means, value nor
 
 ## Consent banner flow with GTM
 
-If the site has a cookie consent banner, set the Initialization tag's **Tracking mode** to **Cookieless** so the page loads with no cookies before the user has consented.
+The template's **Tracking mode** is a fixed choice (Cookie or Cookieless): the tag cannot switch mode by itself when consent is given, and firing a second Init tag on the same page is not supported.
 
-The GTM template does not expose an `upgradeStorage` field on its Init tag, and firing a second Init tag on accept is not a pattern documented by the upstream template. For the upgrade-on-accept flow, call `window.wireboard('upgradeStorage', { useCookies: true, useLocalStorage: true })` directly from your banner's accept handler (this works because the Init tag has loaded `wireboard.js`, which exposes `window.wireboard` globally). The full handler patterns for Cookiebot, OneTrust, Termly, Osano, and custom banners are in [`tracking-script.md`](tracking-script.md) under "Integration with common consent platforms" — they are the same regardless of how `wireboard.js` was loaded.
+**Do not combine Cookieless mode with `upgradeStorage` in the banner's accept handler.** Consent tools announce an existing consent again on every page load, and a tracker that starts cookieless ignores the visitor's cookie: each `upgradeStorage` then writes a new visitor ID, so a returning visitor counts as new on every page.
 
-For revoke, follow the reload-into-cookieless pattern from `tracking-script.md` Step 3. The CMP's consent state determines the Init tag's effective mode on the next page load.
+Two setups that work, pick with the user:
 
-## Step 4: Publish
+1. **Track only after consent** (returning visitors recognized): Tracking mode **Cookie**, and in the tag's **Advanced Settings, Consent Settings**, choose **Require additional consent for tag to fire** with `analytics_storage`. The consent tool must feed Google Consent Mode (Cookiebot, OneTrust, Usercentrics and most others can). Nothing is tracked before consent; when consent arrives, the tag fires and tracking starts with cookies. Visitors who never consent are not counted.
+2. **Count everyone, never store anything**: Tracking mode **Cookieless**, no `upgradeStorage`. Every visit is counted, without returning-visitor detection.
 
-1. **Submit** the workspace changes.
-2. Use **Preview** to test before publishing: open the site in the Preview pane, check that the **WireBoard Analytics** Initialization tag fires on page load.
+To count everyone without consent AND recognize returning visitors after consent, use the code install path instead ([`tracking-script.md`](tracking-script.md), "Consent banner flow"): there the tracker's mode is chosen on each page load from the consent state.
+
+For withdrawal, use the erase-then-reload handler from `tracking-script.md` (Step 3). With setup 1 the tag then no longer fires; with setup 2 nothing was stored.
+
+## Step 4: Preview, then publish
+
+1. Click **Preview**, open the site in the Tag Assistant window, and check that the **WireBoard Analytics** Initialization tag fires on page load.
+2. When it does, click **Submit** and publish the workspace version. Nothing reaches visitors until it is published.
 
 ## Step 5: Verify
 
-1. Open the site in a fresh browser tab.
-2. DevTools → Network → filter by the **collector hostname** from the Initialization tag (default `pipeline-0.collector.wireboard.io`).
-3. Reload. There should be at least one request to that hostname returning HTTP 200.
-4. If Auto-capture is ON: trigger a tracked event (e.g. submit a form that already pushes to dataLayer) and confirm a second request appears.
-5. The WireBoard dashboard's site detail page will show "Tracking installed" once the first hit lands.
+Follow Step 5 of [`SKILL.md`](SKILL.md) (visible browser, Network tab filtered by the collector hostname, then confirm the visit in WireBoard). If Auto-capture is ON, also trigger an event the site already pushes to `dataLayer` and confirm a second request appears.
 
-## Out of scope for this path
+The site manager's "connected" icon stays off for GTM installs: it looks for the snippet in the homepage's HTML, and GTM adds it later in the browser. That is expected; confirm with real traffic instead.
 
-- **SPA route tracking.** GTM's `Initialization - All Pages` trigger only fires on full page loads. If the site is a single-page app and the user needs per-navigation pageviews, use the code-edit install path (`tracking-script.md` + `spa-routing.md`) instead of, or alongside, this GTM path.
-- **Inspecting `wireboard.js` or `events.min.js`.** Same rule as the rest of this skill: do not read tracker source. The fields above are the API contract.
+## Single-page apps with GTM
+
+The Initialization tag runs on full page loads only, so client-side navigations are not counted out of the box. Two ways to fix it:
+
+**A. In the codebase**: add the `<meta name="wireboard-publisher">` tag and the router hook from [`spa-routing.md`](spa-routing.md). The router hook reads the publisher from the meta tag; it does not get it from GTM.
+
+**B. In GTM only**: a Custom HTML tag fired by a **History Change** trigger. Use the same Publisher UUID as the Initialization tag:
+
+```html
+<script>
+(function () {
+  var strip = function (u) { return String(u).split('#')[0]; };
+  var nav = window.performance && performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+  var last = window.__wbLastUrl || strip(nav ? nav.name : document.referrer);
+  var url = strip(location.href);
+  if (url === last || typeof window.wireboard !== 'function') return; // same page, or tracker not loaded
+  window.__wbLastUrl = url;
+  setTimeout(function () { // give the app time to set the new page title
+    window.wireboard('setCustomUrl', url);
+    window.wireboard('setReferrerUrl', last);
+    window.wireboard('trackPageView', null, [
+      { schema: 'wb:io.wireboard/publisher', data: { publisher: 'YOUR-PUBLISHER-UUID' } }
+    ]);
+  }, 250);
+})();
+</script>
+```
+
+The History Change trigger also fires for `#anchor` jumps and URL rewrites that do not change the page; the tag ignores those. Check it in Preview: one WireBoard request per real navigation.
