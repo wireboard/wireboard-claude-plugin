@@ -61,7 +61,7 @@ This tag loads WireBoard on every page and starts tracking. **Create exactly one
    | Site ID | The user's `appId` from their tracking snippet (8-char). Ask them to paste their snippet or open [the site manager](https://wireboard.io/dashboard?action=site-edit). |
    | Publisher ID | The UUID in the user's tracking snippet (`publisher:'...'`). Settings, Integrations shows the selected team owner's UUID, which is wrong if another team is selected. |
    | Collector URL | Leave the default (`pipeline-0.collector.wireboard.io`) unless the snippet shows a different host. |
-   | Tracking mode | **Cookie** (default) or **Cookieless**. Match the user's consent posture. If they have a consent banner, see "Consent banner flow" below. |
+   | Tracking mode | **Cookie** (default), **Cookieless**, or **Consent Mode** (template v1.1.0 and later). With a consent banner, see "Consent banner flow" below. |
    | Auto-capture events from window.dataLayer (recommended) | Leave **ON** if the site already pushes GA4-style events to `window.dataLayer`. Forwards them to WireBoard automatically. |
    | Track engagement (activity heartbeat) | Leave **ON** (heartbeat: time on page, scroll, etc.). |
 
@@ -92,18 +92,15 @@ For the event field semantics (what category vs action vs label means, value nor
 
 ## Consent banner flow with GTM
 
-The template's **Tracking mode** is a fixed choice (Cookie or Cookieless): the tag cannot switch mode by itself when consent is given, and firing a second Init tag on the same page is not supported.
+**Do not combine the Cookieless mode with `upgradeStorage` in the banner's accept handler.** Consent tools announce an existing consent again on every page load, and a tracker that starts cookieless ignores the visitor's cookie: each `upgradeStorage` then writes a new visitor ID, so a returning visitor counts as new on every page.
 
-**Do not combine Cookieless mode with `upgradeStorage` in the banner's accept handler.** Consent tools announce an existing consent again on every page load, and a tracker that starts cookieless ignores the visitor's cookie: each `upgradeStorage` then writes a new visitor ID, so a returning visitor counts as new on every page.
+Pick one setup with the user:
 
-Two setups that work, pick with the user:
+1. **Consent Mode (recommended with a banner)**: Tracking mode **Consent Mode (cookieless until analytics_storage is granted)**, available from template v1.1.0. When the tag fires it reads Google Consent Mode's `analytics_storage`: visitors who already consented are tracked with cookies and keep their visitor ID, the others are tracked cookieless, and the tracker switches to cookies once if the visitor accepts during the page. Everyone is counted. Requirements: the consent tool feeds Google Consent Mode (Cookiebot, OneTrust, Usercentrics and most others can), and the tag fires on **Initialization - All Pages** without "Require additional consent" (it must fire for visitors who decline too). If the container still has template v1.0.0, update it first: download `template.tpl` from the link in Step 1, open the template in GTM, **⋮**, **Import**, save.
+2. **Track only after consent**: Tracking mode **Cookie**, and in the tag's **Advanced Settings, Consent Settings**, choose **Require additional consent for tag to fire** with `analytics_storage`. Nothing is tracked before consent; visitors who never consent are not counted.
+3. **Count everyone, never store anything**: Tracking mode **Cookieless**, no `upgradeStorage`. No returning-visitor detection.
 
-1. **Track only after consent** (returning visitors recognized): Tracking mode **Cookie**, and in the tag's **Advanced Settings, Consent Settings**, choose **Require additional consent for tag to fire** with `analytics_storage`. The consent tool must feed Google Consent Mode (Cookiebot, OneTrust, Usercentrics and most others can). Nothing is tracked before consent; when consent arrives, the tag fires and tracking starts with cookies. Visitors who never consent are not counted.
-2. **Count everyone, never store anything**: Tracking mode **Cookieless**, no `upgradeStorage`. Every visit is counted, without returning-visitor detection.
-
-To count everyone without consent AND recognize returning visitors after consent, use the code install path instead ([`tracking-script.md`](tracking-script.md), "Consent banner flow"): there the tracker's mode is chosen on each page load from the consent state.
-
-For withdrawal, use the erase-then-reload handler from `tracking-script.md` (Step 3). With setup 1 the tag then no longer fires; with setup 2 nothing was stored.
+For withdrawal, use the erase-then-reload handler from `tracking-script.md` (Step 3). After the reload, setup 1 starts cookieless again, setup 2 no longer fires, and setup 3 stored nothing.
 
 ## Step 4: Preview, then publish
 
